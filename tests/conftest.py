@@ -32,3 +32,8 @@ def data_lake_template(data_lake):
 @pytest.fixture(scope="session")
 def github_deploy_template(github_deploy):
     return assertions.Template.from_stack(github_deploy)
+
+
+@pytest.fixture(scope="session")
+def research_pipeline_template(app):
+    return assertions.Template.from_stack(app.node.find_child("ResearchPipeline"))

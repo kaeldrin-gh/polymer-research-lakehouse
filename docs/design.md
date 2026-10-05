@@ -1,6 +1,7 @@
 # Design: polymer-research-lakehouse (working name)
 
-Status: 5 October 2026. Draft for approval. No code and no AWS account yet.
+Status: 5 October 2026. Approved. M0 is done, and the research domain's load
+code (part of M2) is written and tested without AWS. No AWS account yet.
 
 ## Objective
 
@@ -220,6 +221,16 @@ M0 needs no account, so the six-month clock starts only at M1.
 - **AWS DataZone for the catalog.** Paid per user after its free tier and
   heavy for one person. A static catalog page from the descriptors, the dbt
   manifest and OpenLineage covers the same story.
+
+## Findings so far
+
+- **Future publication dates.** A live run of the daily feed on 5 October 2026
+  returned 1,670 works published since 5 September, some dated as late as
+  1 January 2031. The dbt tests (M3) need a rule for these.
+- **CDK's Athena task grants too much.** Without its own result location (the
+  workgroup enforces one), `AthenaStartQueryExecution` grants S3 writes on
+  every bucket. The state machines use the raw `.sync` integration with
+  written-out permissions instead.
 
 ## Open questions
 

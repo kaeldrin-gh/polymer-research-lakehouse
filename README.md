@@ -6,11 +6,12 @@ data. A research domain loads polymer and plastics publications from the
 industrial emissions, and a shared data product joins them. Everything is
 serverless and defined in AWS CDK.
 
-**Status:** milestone M0. The CDK skeleton, its tests and CI exist; nothing
-runs on AWS yet. See the [design](docs/design.md) for the plan.
+**Status:** the research domain's load logic and orchestration are written and
+tested (milestone M2 code); nothing runs on AWS yet, because the account opens
+at M1. See the [design](docs/design.md) for the plan.
 
 **Stack:** Python · AWS CDK · S3 · Glue Data Catalog · Athena · Iceberg ·
-GitHub Actions (OIDC) · uv · ruff
+Lambda · Step Functions · EventBridge Scheduler · GitHub Actions (OIDC) · uv · ruff
 
 ## What exists now
 
@@ -18,6 +19,19 @@ GitHub Actions (OIDC) · uv · ruff
   domain; an Athena workgroup that fails any query scanning more than 200 GB;
   an external table over the public OpenAlex snapshot with partition
   projection, exposing no abstracts and no author identities.
+- `ResearchPipeline` stack: two Step Functions state machines.
+  - **Snapshot load** (weekly check): a Lambda compares the OpenAlex release
+    date with a watermark; for a new release, Athena stages the polymer works
+    from the changed partitions only, MERGEs them into the Iceberg table
+    `research.works` (newer `updated_date` wins; works that left the subfield
+    are removed), applies OpenAlex's deletions, compacts, and moves the
+    watermark last, so a failed run is retried from the same point.
+  - **Daily feed**: a Lambda lands the last 30 days of polymer publications
+    from the OpenAlex API as JSON lines (about 1,700 works, ten API calls), and
+    the same MERGE applies them.
+  - The SQL is built and unit-tested in `src/research/`; every value in it is
+    validated. Every IAM permission is written out; schedules stay disabled
+    until the first runs are checked.
 - `GitHubDeploy` stack: an OIDC role that only this repository's `main` branch
   can assume, and that can only assume the CDK bootstrap roles. No access keys.
 - Tests: CDK assertion tests and the cdk-nag AWS Solutions rules, which fail

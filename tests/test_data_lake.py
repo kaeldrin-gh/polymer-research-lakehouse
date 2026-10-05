@@ -101,9 +101,17 @@ def test_athena_workgroup_caps_every_query(data_lake_template):
     )
 
 
+def _table(template, name):
+    (table,) = [
+        t["Properties"]["TableInput"]
+        for t in _resources(template, "AWS::Glue::Table").values()
+        if t["Properties"]["TableInput"]["Name"] == name
+    ]
+    return table
+
+
 def _works_table(template):
-    (table,) = _resources(template, "AWS::Glue::Table").values()
-    return table["Properties"]["TableInput"]
+    return _table(template, "works")
 
 
 def test_openalex_table_uses_partition_projection_over_the_public_bucket(data_lake_template):
@@ -134,3 +142,55 @@ def test_openalex_table_exposes_no_abstracts_or_author_identities(data_lake_temp
             assert personal not in type_, name
     # The partition key must not repeat a data column.
     assert "partition_date" not in columns
+
+
+def _joined(value):
+    # Bucket names are CloudFormation references; render them as <ref>.
+    if isinstance(value, str):
+        return value
+    return "".join(p if isinstance(p, str) else "<ref>" for p in value["Fn::Join"][1])
+
+
+def test_api_feed_table_reads_one_partition_per_fetch_date(data_lake_template):
+    table = _table(data_lake_template, "api_works")
+    params = table["Parameters"]
+    assert table["StorageDescriptor"]["SerdeInfo"]["SerializationLibrary"] == (
+        "org.openx.data.jsonserde.JsonSerDe"
+    )
+    assert _joined(table["StorageDescriptor"]["Location"]) == "s3://<ref>/landing/openalex_api/"
+    assert _joined(params["storage.location.template"]) == (
+        "s3://<ref>/landing/openalex_api/fetch_date=${fetch_date}/"
+    )
+    assert [key["Name"] for key in table["PartitionKeys"]] == ["fetch_date"]
+    columns = [c["Name"] for c in table["StorageDescriptor"]["Columns"]]
+    assert not [c for c in columns if "author" in c or "orcid" in c]
+
+
+def test_deleted_ids_table_skips_the_csv_header(data_lake_template):
+    table = _table(data_lake_template, "deleted_works")
+    assert table["Parameters"]["skip.header.line.count"] == "1"
+    assert [c["Name"] for c in table["StorageDescriptor"]["Columns"]] == [
+        "work_id",
+        "deleted_date",
+    ]
+
+
+def test_failed_runs_leave_no_staging_data_behind(data_lake_template):
+    data_lake_template.has_resource_properties(
+        "AWS::S3::Bucket",
+        {
+            "LifecycleConfiguration": {
+                "Rules": Match.array_with(
+                    [
+                        Match.object_like(
+                            {
+                                "Id": "ExpireStaging",
+                                "Prefix": "staging/",
+                                "ExpirationInDays": config.STAGING_RETENTION_DAYS,
+                            }
+                        )
+                    ]
+                )
+            }
+        },
+    )
