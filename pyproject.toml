@@ -1,0 +1,32 @@
+[project]
+name = "polymer-research-lakehouse"
+version = "0.1.0"
+description = "A small data mesh on AWS for polymer research (OpenAlex) and industrial sustainability (EEA) data."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "aws-cdk-lib==2.272.0",
+    "constructs>=10.8,<11",
+    "cdk-nag>=3.0,<4",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9,<10",
+    "ruff==0.16.10",
+]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"

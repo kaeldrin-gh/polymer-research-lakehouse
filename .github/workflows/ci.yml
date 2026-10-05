@@ -1,0 +1,106 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v10
+        with:
+          enable-cache: true
+
+      # jsii runs the CDK construct library on Node, also during the tests.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: |
+          uv sync --locked
+          npm ci
+
+      - name: Lint
+        run: uv run ruff check .
+
+      - name: Format check
+        run: uv run ruff format --check .
+
+      - name: Unit and CDK assertion tests (no AWS needed)
+        run: uv run pytest -q
+
+      - name: cdk synth (cdk-nag security checks fail it on any finding)
+        env:
+          CDK_DISABLE_CLI_TELEMETRY: "true"
+        run: npx cdk synth --quiet --no-notices
+
+  deploy:
+    needs: test
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    concurrency:
+      group: deploy
+      cancel-in-progress: false
+    steps:
+      # Without an AWS account (before M1, after the free plan ends) CI stays
+      # green and skips the deploy with a notice.
+      - name: Check for the AWS deploy role
+        id: role
+        env:
+          ROLE_ARN: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+        run: |
+          if [ -n "$ROLE_ARN" ]; then
+            echo "configured=yes" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=no" >> "$GITHUB_OUTPUT"
+            echo "::notice::AWS_DEPLOY_ROLE_ARN is not set - skipping the deploy."
+          fi
+
+      - uses: actions/checkout@v7
+        if: steps.role.outputs.configured == 'yes'
+
+      - uses: astral-sh/setup-uv@v10
+        if: steps.role.outputs.configured == 'yes'
+        with:
+          enable-cache: true
+
+      - uses: actions/setup-node@v7
+        if: steps.role.outputs.configured == 'yes'
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        if: steps.role.outputs.configured == 'yes'
+        run: |
+          uv sync --locked
+          npm ci
+
+      # Keyless: GitHub's OIDC token becomes a one-hour role session.
+      - uses: aws-actions/configure-aws-credentials@v6
+        if: steps.role.outputs.configured == 'yes'
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: us-east-1
+          mask-aws-account-id: true
+
+      # GitHubDeploy is deployed by hand only, so CI can never widen its own
+      # trust policy.
+      - name: Deploy
+        if: steps.role.outputs.configured == 'yes'
+        env:
+          CDK_DISABLE_CLI_TELEMETRY: "true"
+        run: npx cdk deploy DataLake --require-approval never --no-notices

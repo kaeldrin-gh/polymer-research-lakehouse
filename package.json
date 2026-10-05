@@ -1,0 +1,8 @@
+{
+  "name": "polymer-research-lakehouse-cdk-cli",
+  "private": true,
+  "description": "Pins the AWS CDK CLI; the app itself is Python (infra/).",
+  "devDependencies": {
+    "aws-cdk": "2.1144.0"
+  }
+}
