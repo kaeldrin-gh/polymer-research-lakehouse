@@ -38,23 +38,37 @@ The session refreshes for up to 12 hours; run `aws login` again after that.
 ### Bootstrap CDK and the deploy role
 
 1. Run `npm ci` and `uv sync`.
-2. Bootstrap CDK:
+2. Create the CloudFormation execution policy from
+   `infra/bootstrap/cfn-execution-policy.json` (replace `${ACCOUNT}` with the
+   account ID first):
 
    ```bash
-   npx cdk bootstrap --profile prl
+   aws iam create-policy --policy-name polymer-research-lakehouse-cfn-execution --policy-document file://cfn-execution-policy.json --profile prl
    ```
 
-3. Deploy the GitHub deploy role:
+3. Bootstrap CDK with that policy instead of the default administrator
+   access:
+
+   ```bash
+   npx cdk bootstrap --profile prl --cloudformation-execution-policies arn:aws:iam::<account>:policy/polymer-research-lakehouse-cfn-execution
+   ```
+
+   CloudFormation can then manage only this project's services, `prl-*`
+   buckets and roles named after its stacks. A new AWS service in a stack
+   needs a line in the policy first; update it with
+   `aws iam create-policy-version --set-as-default`.
+
+4. Deploy the GitHub deploy role:
 
    ```bash
    npx cdk deploy GitHubDeploy --profile prl
    ```
 
-4. Copy the `DeployRoleArn` output.
-5. In the GitHub repository, add the secret `AWS_DEPLOY_ROLE_ARN` with that
+5. Copy the `DeployRoleArn` output.
+6. In the GitHub repository, add the secret `AWS_DEPLOY_ROLE_ARN` with that
    value (Settings > Secrets and variables > Actions).
-6. Push to `main`. CI now deploys `DataLake`, `ResearchPipeline` and
-   `SustainabilityPipeline`.
+7. Push to `main`. CI now deploys `DataLake`, `ResearchPipeline`,
+   `SustainabilityPipeline`, `ProductsBuild` and `Governance`.
 
 `GitHubDeploy` is never deployed from CI, so CI cannot change who may assume
 its role.

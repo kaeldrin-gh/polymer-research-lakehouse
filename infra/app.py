@@ -28,7 +28,7 @@ def build_app() -> cdk.App:
     # The account comes from the credentials at deploy time; synth and the
     # tests run without any.
     env = cdk.Environment(account=os.environ.get("CDK_DEFAULT_ACCOUNT"), region=config.REGION)
-    tags = {"project": config.PROJECT}
+    tags = {"project": config.PROJECT, "managed-by": "cdk"}
 
     GitHubDeployStack(app, "GitHubDeploy", env=env, tags=tags)
     data_lake = DataLakeStack(app, "DataLake", env=env, tags=tags)

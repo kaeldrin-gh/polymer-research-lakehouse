@@ -1,0 +1,111 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ProjectServices",
+      "Effect": "Allow",
+      "Action": [
+        "athena:*",
+        "ec2:*",
+        "ecs:*",
+        "glue:*",
+        "lakeformation:*",
+        "lambda:*",
+        "logs:*",
+        "scheduler:*",
+        "states:*"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "ProjectBuckets",
+      "Effect": "Allow",
+      "Action": "s3:*",
+      "Resource": [
+        "arn:aws:s3:::prl-*",
+        "arn:aws:s3:::prl-*/*"
+      ]
+    },
+    {
+      "Sid": "ReadCdkAssets",
+      "Effect": "Allow",
+      "Action": ["s3:GetObject", "s3:GetObjectVersion", "s3:ListBucket", "s3:GetBucketLocation"],
+      "Resource": [
+        "arn:aws:s3:::cdk-hnb659fds-assets-${ACCOUNT}-us-east-1",
+        "arn:aws:s3:::cdk-hnb659fds-assets-${ACCOUNT}-us-east-1/*"
+      ]
+    },
+    {
+      "Sid": "ProjectRoles",
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreateRole",
+        "iam:DeleteRole",
+        "iam:GetRole",
+        "iam:UpdateRole",
+        "iam:UpdateRoleDescription",
+        "iam:UpdateAssumeRolePolicy",
+        "iam:PutRolePolicy",
+        "iam:GetRolePolicy",
+        "iam:DeleteRolePolicy",
+        "iam:ListRolePolicies",
+        "iam:ListAttachedRolePolicies",
+        "iam:TagRole",
+        "iam:UntagRole",
+        "iam:ListRoleTags",
+        "iam:PassRole"
+      ],
+      "Resource": [
+        "arn:aws:iam::${ACCOUNT}:role/DataLake-*",
+        "arn:aws:iam::${ACCOUNT}:role/ResearchPipeline-*",
+        "arn:aws:iam::${ACCOUNT}:role/SustainabilityPipeline-*",
+        "arn:aws:iam::${ACCOUNT}:role/ProductsBuild-*",
+        "arn:aws:iam::${ACCOUNT}:role/Governance-*",
+        "arn:aws:iam::${ACCOUNT}:role/GitHubDeploy-*",
+        "arn:aws:iam::${ACCOUNT}:role/polymer-research-lakehouse-*"
+      ]
+    },
+    {
+      "Sid": "GitHubOidcProvider",
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreateOpenIDConnectProvider",
+        "iam:DeleteOpenIDConnectProvider",
+        "iam:GetOpenIDConnectProvider",
+        "iam:UpdateOpenIDConnectProviderThumbprint",
+        "iam:AddClientIDToOpenIDConnectProvider",
+        "iam:RemoveClientIDFromOpenIDConnectProvider",
+        "iam:TagOpenIDConnectProvider",
+        "iam:UntagOpenIDConnectProvider",
+        "iam:ListOpenIDConnectProviderTags"
+      ],
+      "Resource": "arn:aws:iam::${ACCOUNT}:oidc-provider/token.actions.githubusercontent.com"
+    },
+    {
+      "Sid": "ServiceLinkedRoles",
+      "Effect": "Allow",
+      "Action": ["iam:CreateServiceLinkedRole", "iam:GetRole"],
+      "Resource": "arn:aws:iam::${ACCOUNT}:role/aws-service-role/*",
+      "Condition": {
+        "StringEquals": {
+          "iam:AWSServiceName": ["lakeformation.amazonaws.com", "ecs.amazonaws.com"]
+        }
+      }
+    },
+    {
+      "Sid": "LakeFormationLocationRegistration",
+      "Effect": "Allow",
+      "Action": ["iam:GetRole", "iam:PutRolePolicy", "iam:GetRolePolicy"],
+      "Resource": "arn:aws:iam::${ACCOUNT}:role/aws-service-role/lakeformation.amazonaws.com/AWSServiceRoleForLakeFormationDataAccess"
+    },
+    {
+      "Sid": "SsmParameters",
+      "Effect": "Allow",
+      "Action": ["ssm:GetParameter", "ssm:GetParameters"],
+      "Resource": [
+        "arn:aws:ssm:us-east-1:${ACCOUNT}:parameter/cdk-bootstrap/*",
+        "arn:aws:ssm:us-east-1:${ACCOUNT}:parameter/polymer-research-lakehouse/*"
+      ]
+    }
+  ]
+}

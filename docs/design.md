@@ -1,8 +1,8 @@
 # Design: polymer-research-lakehouse (working name)
 
-Status: 6 October 2026. Approved. M0 is done. The code of both domains (load
-pipelines, dbt products, shared product) is written and tested without AWS,
-so M2 to M4 are mostly deploying and verifying it. No AWS account yet.
+Status: 6 October 2026. Built and running on AWS: both domains' loads, the
+data products on Fargate, Lake Formation governance, and the report with the
+data product catalog. The findings section records what running it showed.
 
 ## Objective
 
@@ -235,6 +235,10 @@ Guardrails, all in CDK:
   sign-in into short-lived CLI credentials. Not IAM Identity Center: it needs
   AWS Organizations, which ends the free plan.
 - CI: OIDC role only. Workflow logs mask the account ID.
+- CloudFormation: the CDK bootstrap runs stacks with a scoped execution
+  policy (`infra/bootstrap/cfn-execution-policy.json`) instead of the default
+  administrator access: this project's services, `prl-*` buckets, and IAM
+  roles named after its stacks.
 
 ## Milestones
 
