@@ -76,12 +76,12 @@ def test_query_results_and_landing_files_expire(data_lake_template):
     )
 
 
-def test_one_glue_database_per_domain_and_one_for_the_source(data_lake_template):
+def test_glue_databases_per_domain_for_dbt_staging_and_the_source(data_lake_template):
     names = sorted(
         db["Properties"]["DatabaseInput"]["Name"]
         for db in _resources(data_lake_template, "AWS::Glue::Database").values()
     )
-    assert names == sorted([*config.DOMAINS, config.SOURCE_DATABASE])
+    assert names == sorted([*config.DOMAINS, *config.STAGING_DATABASES, config.SOURCE_DATABASE])
 
 
 def test_athena_workgroup_caps_every_query(data_lake_template):

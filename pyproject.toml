@@ -15,6 +15,11 @@ dependencies = [
 dev = [
     "pytest>=9,<10",
     "ruff==0.16.10",
+    # dbt runs on DuckDB with the committed sample in CI and locally; the
+    # Athena adapter is added when the project first runs on AWS (M3).
+    "dbt-core>=1.12,<1.13",
+    "dbt-duckdb>=1.11,<1.12",
+    "duckdb>=1.5,<1.6",
 ]
 
 [build-system]

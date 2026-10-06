@@ -82,9 +82,10 @@ energy input for about 31 European countries, 2007 to 2024.
 | sustainability | EEA industrial reporting | `sustainability.facility_releases` (SCD Type 2 across EEA versions), `sustainability.chemical_sector_by_country_year` |
 | shared | joins products, owns nothing raw | `products.research_vs_emissions` (per country and year: polymer research output, its SDG-tagged share, chemical-sector releases) |
 
-Each data product has a YAML descriptor in the repository: owner, domain,
-description, schema contract, freshness SLA and quality checks. dbt contracts
-enforce the schema; the descriptor feeds the catalog page.
+Each data product is described in its dbt model's YAML: owner, domain,
+description, freshness SLA (`meta`), an enforced schema contract and its data
+tests. The dbt manifest therefore holds every descriptor, and feeds the
+catalog page.
 
 ### Architecture
 
@@ -139,8 +140,8 @@ Components:
   own databases; an analyst role can read only `tier=product`. All grants are
   CDK code.
 - **Lineage and catalog**: dbt emits OpenLineage events (`dbt-ol`) to S3; a
-  build step combines them with the dbt manifest and the product descriptors
-  into a static catalog page on GitHub Pages.
+  build step combines them with the dbt manifest (which holds the product
+  descriptors) into a static catalog page on GitHub Pages.
 - **Observability**: a CloudWatch dashboard (executions, Lambda errors, Athena
   bytes scanned), log retention of 14 days, and a quality-results table. A
   daily GitHub Actions workflow reads the last execution status and opens a
@@ -225,8 +226,13 @@ M0 needs no account, so the six-month clock starts only at M1.
 ## Findings so far
 
 - **Future publication dates.** A live run of the daily feed on 5 October 2026
-  returned 1,670 works published since 5 September, some dated as late as
-  1 January 2031. The dbt tests (M3) need a rule for these.
+  returned 1,670 works published since 5 September; 8 were dated in the
+  future, 4 more than a year ahead (as late as 1 January 2031), several of
+  them dissertations dated by their embargo end. Rule, in dbt: a date later in
+  the current year counts; a later year is flagged, left out of per-year
+  products and listed by a warning test.
+- **Works without a publication year.** 6 of the 3,000 sampled works have
+  none; per-year products leave them out.
 - **CDK's Athena task grants too much.** Without its own result location (the
   workgroup enforces one), `AthenaStartQueryExecution` grants S3 writes on
   every bucket. The state machines use the raw `.sync` integration with

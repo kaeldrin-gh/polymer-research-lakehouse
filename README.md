@@ -11,7 +11,8 @@ tested (milestone M2 code); nothing runs on AWS yet, because the account opens
 at M1. See the [design](docs/design.md) for the plan.
 
 **Stack:** Python · AWS CDK · S3 · Glue Data Catalog · Athena · Iceberg ·
-Lambda · Step Functions · EventBridge Scheduler · GitHub Actions (OIDC) · uv · ruff
+Lambda · Step Functions · EventBridge Scheduler · dbt · DuckDB ·
+GitHub Actions (OIDC) · uv · ruff
 
 ## What exists now
 
@@ -34,8 +35,12 @@ Lambda · Step Functions · EventBridge Scheduler · GitHub Actions (OIDC) · uv
     until the first runs are checked.
 - `GitHubDeploy` stack: an OIDC role that only this repository's `main` branch
   can assume, and that can only assume the CDK bootstrap roles. No access keys.
-- Tests: CDK assertion tests and the cdk-nag AWS Solutions rules, which fail
-  the synth on any finding without a written reason.
+- dbt project (`dbt/`): staging and intermediate views, and the research data
+  products `works_by_country_year` and `topic_trends` with enforced contracts,
+  data tests and unit tests. It runs on DuckDB with a committed, seeded sample
+  of 3,000 real OpenAlex works (`sample/`, CC0) and will run on Athena from M3.
+- Tests: Python unit tests, CDK assertion tests, and the cdk-nag AWS Solutions
+  rules, which fail the synth on any finding without a written reason.
 
 ## Run locally
 
@@ -46,6 +51,9 @@ npm ci
 uv run pytest -q                 # tests, no AWS account needed
 uv run ruff check . && uv run ruff format --check .
 npx cdk synth --quiet            # CloudFormation templates in cdk.out/
+
+uv run python scripts/load_sample.py                      # sample into DuckDB
+uv run dbt build --project-dir dbt --profiles-dir dbt     # models and tests
 ```
 
 Account setup and deploys: [docs/operations.md](docs/operations.md).

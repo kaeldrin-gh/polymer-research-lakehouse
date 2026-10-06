@@ -11,3 +11,10 @@ cdk.context.json
 exports/
 CLAUDE.md
 .DS_Store
+dbt/target/
+dbt/logs/
+dbt/dbt_packages/
+dbt/.user.yml
+logs/
+*.duckdb
+*.duckdb.wal

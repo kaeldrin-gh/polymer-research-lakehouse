@@ -1,0 +1,53 @@
+version: 2
+
+models:
+  - name: stg_research__works
+    description: One row per work from research.works, renamed and flagged.
+    columns:
+      - name: work_id
+        data_tests: [unique, not_null]
+      - name: is_future_dated
+        description: Publication date after the as-of date (today unless pinned).
+      - name: is_beyond_current_year
+        description: Publication year after the as-of year; left out of per-year products.
+
+unit_tests:
+  - name: future_dates_are_flagged_against_the_as_of_date
+    description: >
+      A date later in the current year is future-dated but still counted; a date in a
+      later year is beyond the current year. Fixtures use DuckDB list literals, so this
+      runs on the CI target only.
+    model: stg_research__works
+    overrides:
+      vars:
+        as_of_date: "2026-10-06"
+    given:
+      - input: source('research', 'works')
+        format: sql
+        # format: sql fixtures must supply every column the model reads.
+        rows: |
+          with fixture as (
+              select * from (values
+                  ('W1', date '2026-09-20', 2026, ['DE']::varchar[], []::varchar[]),
+                  ('W2', date '2026-12-01', 2026, ['DE']::varchar[], ['sdg/12']::varchar[]),
+                  ('W3', date '2030-01-01', 2030, []::varchar[], []::varchar[]),
+                  ('W4', null::date, null::integer, null::varchar[], null::varchar[])
+              ) as v(id, publication_date, publication_year, country_codes, sdg_ids)
+          )
+          select
+              id, null::varchar as doi, null::varchar as title, publication_date,
+              publication_year, 'article' as type, 'en' as language,
+              false as is_retracted, null::varchar as topic_id, null::varchar as topic_name,
+              null::double as topic_score, sdg_ids, false as is_oa,
+              null::varchar as oa_status, 0 as cited_by_count, null::double as fwci,
+              []::varchar[] as institution_ids, country_codes,
+              timestamp '2026-10-01 00:00:00' as created_date,
+              timestamp '2026-10-01 00:00:00' as updated_date,
+              'api' as source, timestamp '2026-10-06 00:00:00' as loaded_at
+          from fixture
+    expect:
+      rows:
+        - {work_id: W1, is_future_dated: false, is_beyond_current_year: false, has_sdg: false}
+        - {work_id: W2, is_future_dated: true, is_beyond_current_year: false, has_sdg: true}
+        - {work_id: W3, is_future_dated: true, is_beyond_current_year: true, has_sdg: false}
+        - {work_id: W4, is_future_dated: false, is_beyond_current_year: false, has_sdg: false}

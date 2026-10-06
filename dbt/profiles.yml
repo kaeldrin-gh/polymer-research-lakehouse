@@ -1,0 +1,10 @@
+polymer_research:
+  target: ci
+  outputs:
+    # DuckDB with the committed sample (scripts/load_sample.py), locally and in
+    # CI. The Athena target is added when the project first runs on AWS (M3).
+    ci:
+      type: duckdb
+      path: "{{ env_var('DUCKDB_PATH', 'dbt/target/lakehouse.duckdb') }}"
+      schema: research
+      threads: 4

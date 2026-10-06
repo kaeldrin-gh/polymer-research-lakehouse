@@ -1,0 +1,93 @@
+version: 2
+
+# Data products of the research domain. Contracts are enforced, so a changed
+# column name or type fails the build instead of breaking consumers.
+
+models:
+  - name: works_by_country_year
+    description: >
+      Polymer and plastics research output per institution country and publication
+      year. A work with authors in several countries counts once for each.
+    meta:
+      domain: research
+      owner: research domain team
+      data_product: true
+      freshness_sla_hours: 48
+    data_tests:
+      - unique:
+          arguments:
+            column_name: "country_code || '|' || cast(publication_year as varchar)"
+    columns:
+      - name: country_code
+        data_type: string
+        description: ISO 3166-1 alpha-2 code of an author's institution.
+        constraints: [{type: not_null}]
+        data_tests: [not_null]
+      - name: publication_year
+        data_type: bigint
+        constraints: [{type: not_null}]
+        data_tests: [not_null]
+      - name: works
+        data_type: bigint
+        data_tests:
+          - within_range: {arguments: {min_value: 1, max_value: 10000000}}
+      - name: open_access_works
+        data_type: bigint
+      - name: open_access_share
+        data_type: double
+        data_tests:
+          - within_range: {arguments: {min_value: 0, max_value: 1}}
+      - name: sdg_tagged_works
+        data_type: bigint
+        description: Works tagged with at least one UN Sustainable Development Goal.
+      - name: sdg_tagged_share
+        data_type: double
+        data_tests:
+          - within_range: {arguments: {min_value: 0, max_value: 1}}
+      - name: citations
+        data_type: bigint
+      - name: mean_fwci
+        data_type: double
+        description: Mean field-weighted citation impact of the works that have one.
+
+  - name: topic_trends
+    description: Works per OpenAlex topic and publication year, and the topic's share of that year.
+    meta:
+      domain: research
+      owner: research domain team
+      data_product: true
+      freshness_sla_hours: 48
+    data_tests:
+      - unique:
+          arguments:
+            column_name: "topic_id || '|' || cast(publication_year as varchar)"
+    columns:
+      - name: topic_id
+        data_type: string
+        constraints: [{type: not_null}]
+        data_tests: [not_null]
+      - name: topic_name
+        data_type: string
+      - name: publication_year
+        data_type: bigint
+        constraints: [{type: not_null}]
+      - name: works
+        data_type: bigint
+      - name: share_of_year
+        data_type: double
+        data_tests:
+          - within_range: {arguments: {min_value: 0, max_value: 1}}
+
+unit_tests:
+  - name: country_year_counts_and_shares
+    model: works_by_country_year
+    given:
+      - input: ref('int_research__work_countries')
+        rows:
+          - {work_id: W1, country_code: DE, publication_year: 2025, is_open_access: true, has_sdg: true, cited_by_count: 4, fwci: 1.5}
+          - {work_id: W2, country_code: DE, publication_year: 2025, is_open_access: false, has_sdg: false, cited_by_count: 0, fwci: null}
+          - {work_id: W2, country_code: NL, publication_year: 2025, is_open_access: false, has_sdg: false, cited_by_count: 0, fwci: null}
+    expect:
+      rows:
+        - {country_code: DE, publication_year: 2025, works: 2, open_access_works: 1, open_access_share: 0.5, sdg_tagged_works: 1, sdg_tagged_share: 0.5, citations: 4, mean_fwci: 1.5}
+        - {country_code: NL, publication_year: 2025, works: 1, open_access_works: 0, open_access_share: 0.0, sdg_tagged_works: 0, sdg_tagged_share: 0.0, citations: 0, mean_fwci: null}

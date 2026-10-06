@@ -24,6 +24,9 @@ def bucket_name(key: str, account: str, region: str) -> str:
 
 # External tables over the public OpenAlex snapshot; nothing is stored here.
 SOURCE_DATABASE = "openalex_source"
+# dbt staging and intermediate views (dbt/dbt_project.yml); products go to the
+# domain database itself.
+STAGING_DATABASES = ("research_staging",)
 
 OPENALEX_WORKS_LOCATION = "s3://openalex/data/parquet/works/"
 

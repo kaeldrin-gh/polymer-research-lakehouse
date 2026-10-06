@@ -39,6 +39,11 @@ jobs:
       - name: Unit and CDK assertion tests (no AWS needed)
         run: uv run pytest -q
 
+      - name: dbt build on DuckDB (committed OpenAlex sample)
+        run: |
+          uv run python scripts/load_sample.py
+          uv run dbt build --project-dir dbt --profiles-dir dbt
+
       - name: cdk synth (cdk-nag security checks fail it on any finding)
         env:
           CDK_DISABLE_CLI_TELEMETRY: "true"

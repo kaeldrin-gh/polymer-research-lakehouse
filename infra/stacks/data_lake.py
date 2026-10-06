@@ -129,6 +129,17 @@ class DataLakeStack(cdk.Stack):
                 ),
             )
 
+        for name in config.STAGING_DATABASES:
+            glue.CfnDatabase(
+                self,
+                f"{name.title().replace('_', '')}Database",
+                catalog_id=self.account,
+                database_input=glue.CfnDatabase.DatabaseInputProperty(
+                    name=name,
+                    description="dbt staging and intermediate views; consumers read products only.",
+                ),
+            )
+
         source_db = glue.CfnDatabase(
             self,
             "OpenAlexSourceDatabase",

@@ -1,0 +1,31 @@
+name: polymer_research
+version: "1.0.0"
+config-version: 2
+profile: polymer_research
+
+model-paths: ["models"]
+macro-paths: ["macros"]
+test-paths: ["tests"]
+clean-targets: ["target", "dbt_packages", "logs"]
+
+vars:
+  # Products judge "future" publication dates against this date. Null means
+  # today; unit tests pin it.
+  as_of_date: null
+
+models:
+  polymer_research:
+    research:
+      # Each schema is a Glue database on Athena (see infra/stacks/data_lake.py).
+      staging:
+        +schema: research_staging
+        +materialized: view
+      intermediate:
+        +schema: research_staging
+        +materialized: view
+      products:
+        +schema: research
+        +materialized: table
+        +table_type: iceberg
+        +contract:
+          enforced: true
