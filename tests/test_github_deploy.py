@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from infra import config
 from infra.stacks.github_deploy import DEPLOY_ROLE_NAME
 
 
@@ -19,7 +18,8 @@ def test_only_this_repository_main_branch_can_assume_the_role(github_deploy_temp
         "StringEquals": {
             "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
             "token.actions.githubusercontent.com:sub": (
-                f"repo:{config.GITHUB_REPOSITORY}:ref:refs/heads/main"
+                "repo:kaeldrin-gh@76854761/polymer-research-lakehouse@1406366454"
+                ":ref:refs/heads/main"
             ),
         }
     }

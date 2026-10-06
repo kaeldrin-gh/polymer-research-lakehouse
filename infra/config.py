@@ -9,6 +9,20 @@ REGION = "us-east-1"
 
 GITHUB_REPOSITORY = "kaeldrin-gh/polymer-research-lakehouse"
 GITHUB_DEPLOY_BRANCH = "main"
+# GitHub's immutable OIDC subject names the owner and repository with their
+# numeric IDs as well, so a deleted and re-created repository of the same name
+# cannot deploy. From `gh api repos/kaeldrin-gh/polymer-research-lakehouse`.
+GITHUB_OWNER_ID = 76854761
+GITHUB_REPOSITORY_ID = 1406366454
+
+
+def github_oidc_subject() -> str:
+    owner, repository = GITHUB_REPOSITORY.split("/")
+    return (
+        f"repo:{owner}@{GITHUB_OWNER_ID}/{repository}@{GITHUB_REPOSITORY_ID}"
+        f":ref:refs/heads/{GITHUB_DEPLOY_BRANCH}"
+    )
+
 
 # Each domain owns one bucket and one Glue database. `products` holds the
 # shared data products that join the domains.

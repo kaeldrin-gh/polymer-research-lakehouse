@@ -48,9 +48,7 @@ class GitHubDeployStack(cdk.Stack):
                 conditions={
                     "StringEquals": {
                         "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
-                        "token.actions.githubusercontent.com:sub": (
-                            f"repo:{config.GITHUB_REPOSITORY}:ref:refs/heads/{config.GITHUB_DEPLOY_BRANCH}"
-                        ),
+                        "token.actions.githubusercontent.com:sub": config.github_oidc_subject(),
                     }
                 },
             ),
