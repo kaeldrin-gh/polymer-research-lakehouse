@@ -110,7 +110,7 @@ class ProductsBuildStack(PipelineStack):
             file="docker/dbt/Dockerfile",
             platform=ecr_assets.Platform.LINUX_AMD64,
         )
-        task_role = iam.Role(
+        task_role = self.task_role = iam.Role(
             self, "DbtTaskRole", assumed_by=iam.ServicePrincipal("ecs-tasks.amazonaws.com")
         )
         self._grant_dbt(task_role)

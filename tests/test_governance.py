@@ -53,7 +53,11 @@ def test_every_project_database_is_tagged(template):
 
 
 def test_the_reader_is_granted_the_product_tier_only(template):
-    grants = _props(template, "AWS::LakeFormation::PrincipalPermissions")
+    grants = [
+        g
+        for g in _props(template, "AWS::LakeFormation::PrincipalPermissions")
+        if "LFTagPolicy" in g["Resource"]
+    ]
     assert len(grants) == 2
     for grant in grants:
         policy = grant["Resource"]["LFTagPolicy"]
@@ -120,3 +124,28 @@ def test_locations_register_one_at_a_time(template):
     locations = template.find_resources("AWS::LakeFormation::Resource")
     depends = [set(r.get("DependsOn", [])) & set(locations) for r in locations.values()]
     assert sorted(len(d) for d in depends) == [0, 1, 1]
+
+
+def test_only_table_writing_pipeline_roles_get_data_location_access(template):
+    # A registered location needs Lake Formation's data location access to
+    # create tables in it, also for IAM principals in hybrid mode.
+    grants = [
+        g
+        for g in _props(template, "AWS::LakeFormation::PrincipalPermissions")
+        if "DataLocation" in g["Resource"]
+    ]
+    per_bucket = {}
+    for grant in grants:
+        assert grant["Permissions"] == ["DATA_LOCATION_ACCESS"]
+        assert grant["PermissionsWithGrantOption"] == []
+        arn = "".join(
+            p if isinstance(p, str) else "<ref>"
+            for p in grant["Resource"]["DataLocation"]["ResourceArn"]["Fn::Join"][1]
+        )
+        bucket = arn.removeprefix("arn:aws:s3:::prl-").split("-")[0]
+        per_bucket[bucket] = per_bucket.get(bucket, 0) + 1
+        # The reader reads through Lake Formation and never creates tables.
+        assert "ProductReaderRole" not in json.dumps(grant["Principal"])
+    # research: snapshot load, daily feed, dbt; sustainability: Glue job,
+    # dbt; products: dbt.
+    assert per_bucket == {"research": 3, "sustainability": 2, "products": 1}

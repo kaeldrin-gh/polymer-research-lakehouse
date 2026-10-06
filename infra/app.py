@@ -38,7 +38,18 @@ def build_app() -> cdk.App:
     sustainability.add_stack_dependency(data_lake)
     products = ProductsBuildStack(app, "ProductsBuild", env=env, tags=tags)
     products.add_stack_dependency(data_lake)
-    governance = GovernanceStack(app, "Governance", env=env, tags=tags)
+    governance = GovernanceStack(
+        app,
+        "Governance",
+        env=env,
+        tags=tags,
+        # The roles that create tables in each domain bucket.
+        table_writers={
+            "research": [pipeline.snapshot.role, pipeline.daily.role, products.task_role],
+            "sustainability": [sustainability.glue_role, products.task_role],
+            "products": [products.task_role],
+        },
+    )
     governance.add_stack_dependency(data_lake)
 
     # Security rules from cdk-nag: a finding that is not acknowledged with a

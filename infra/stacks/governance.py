@@ -52,7 +52,16 @@ IAM_DEFAULT = [
 
 
 class GovernanceStack(PipelineStack):
-    def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
+    def __init__(
+        self,
+        scope: Construct,
+        construct_id: str,
+        *,
+        table_writers: dict[str, list[iam.IRole]],
+        **kwargs,
+    ) -> None:
+        """`table_writers`: per domain bucket, the pipeline roles that create
+        tables in it (they need data location access once it is registered)."""
         super().__init__(scope, construct_id, **kwargs)
         catalog = self.account
 
@@ -88,7 +97,7 @@ class GovernanceStack(PipelineStack):
             tag = lakeformation.CfnTag(
                 self, f"Tag{key.title()}", tag_key=key, tag_values=values, catalog_id=catalog
             )
-            tag.add_dependency(settings)
+            tag.node.add_dependency(settings)
             tags.append(tag)
 
         for database, assigned in DATABASE_TAGS.items():
@@ -108,13 +117,14 @@ class GovernanceStack(PipelineStack):
                 ],
             )
             for tag in tags:
-                association.add_dependency(tag)
+                association.node.add_dependency(tag)
 
         # Lake Formation can vend file access only for registered locations.
         # Hybrid: IAM principals keep their access to the same files. One at a
         # time: each registration rewrites the service-linked role's S3 policy,
         # and parallel registrations lost one bucket (docs/design.md, Findings).
         previous: cdk.CfnResource = settings
+        self.locations: dict[str, lakeformation.CfnResource] = {}
         for domain in config.DOMAINS:
             location = lakeformation.CfnResource(
                 self,
@@ -124,8 +134,33 @@ class GovernanceStack(PipelineStack):
                 use_service_linked_role=True,
                 hybrid_access_enabled=True,
             )
-            location.add_dependency(previous)
+            location.node.add_dependency(previous)
             previous = location
+            self.locations[domain] = location
+
+        # Registering a location means creating a table there needs Lake
+        # Formation's data location access, also for IAM principals in hybrid
+        # mode. Granted to exactly the roles that create tables in each bucket
+        # (docs/design.md, Findings).
+        for domain, roles in table_writers.items():
+            for index, role in enumerate(roles):
+                grant = lakeformation.CfnPrincipalPermissions(
+                    self,
+                    f"LocationAccess{domain.title()}{index}",
+                    principal=lakeformation.CfnPrincipalPermissions.DataLakePrincipalProperty(
+                        data_lake_principal_identifier=role.role_arn
+                    ),
+                    resource=lakeformation.CfnPrincipalPermissions.ResourceProperty(
+                        data_location=lakeformation.CfnPrincipalPermissions.DataLocationResourceProperty(
+                            catalog_id=catalog,
+                            resource_arn="arn:aws:s3:::"
+                            + config.bucket_name(domain, self.account, self.region),
+                        )
+                    ),
+                    permissions=["DATA_LOCATION_ACCESS"],
+                    permissions_with_grant_option=[],
+                )
+                grant.node.add_dependency(self.locations[domain])
 
         self.reader = self._reader_role()
         for resource_type, permissions in (
@@ -153,7 +188,7 @@ class GovernanceStack(PipelineStack):
                 permissions_with_grant_option=[],
             )
             for tag in tags:
-                grant.add_dependency(tag)
+                grant.node.add_dependency(tag)
 
         # Opt the reader in on every project database and on all its tables,
         # so Lake Formation, not IAM, decides what it may read everywhere. The

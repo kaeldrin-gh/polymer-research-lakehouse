@@ -105,6 +105,7 @@ class SustainabilityPipelineStack(PipelineStack):
         glue_logs = f"arn:aws:logs:{self.region}:{self.account}:log-group:/aws-glue/*"
         tables = self._glue_arn("table/sustainability/*")
         role = iam.Role(self, "GlueJobRole", assumed_by=iam.ServicePrincipal("glue.amazonaws.com"))
+        self.glue_role = role
         for statement in [
             iam.PolicyStatement(
                 actions=["s3:GetObject"],
