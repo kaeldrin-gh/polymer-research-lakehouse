@@ -12,6 +12,7 @@ from cdk_nag import AwsSolutionsChecks
 from infra import config
 from infra.stacks.data_lake import DataLakeStack
 from infra.stacks.github_deploy import GitHubDeployStack
+from infra.stacks.governance import GovernanceStack
 from infra.stacks.products_build import ProductsBuildStack
 from infra.stacks.research_pipeline import ResearchPipelineStack
 from infra.stacks.sustainability_pipeline import SustainabilityPipelineStack
@@ -37,6 +38,8 @@ def build_app() -> cdk.App:
     sustainability.add_stack_dependency(data_lake)
     products = ProductsBuildStack(app, "ProductsBuild", env=env, tags=tags)
     products.add_stack_dependency(data_lake)
+    governance = GovernanceStack(app, "Governance", env=env, tags=tags)
+    governance.add_stack_dependency(data_lake)
 
     # Security rules from cdk-nag: a finding that is not acknowledged with a
     # written reason fails the synth.
