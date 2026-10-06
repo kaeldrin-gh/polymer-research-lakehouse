@@ -109,8 +109,8 @@ def test_no_action_wildcards_and_star_only_where_aws_requires_it(template):
             } <= {"xray", "logs"}, actions
 
 
-def test_the_schedule_is_off_until_the_first_run_is_checked(template):
+def test_the_schedule_is_on(template):
     (schedule,) = template.find_resources("AWS::Scheduler::Schedule").values()
-    assert schedule["Properties"]["State"] == "DISABLED"
+    assert schedule["Properties"]["State"] == "ENABLED"
     # After the daily feed at 05:15 UTC.
     assert schedule["Properties"]["ScheduleExpression"] == "cron(0 6 * * ? *)"

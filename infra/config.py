@@ -51,5 +51,5 @@ ATHENA_RESULTS_RETENTION_DAYS = 7
 LANDING_RETENTION_DAYS = 90
 STAGING_RETENTION_DAYS = 7
 
-# Scheduled loads stay off until the first runs have been checked by hand.
-SCHEDULES_ENABLED = False
+# Scheduled loads; the first runs of each were checked by hand.
+SCHEDULES_ENABLED = True

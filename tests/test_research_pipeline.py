@@ -88,10 +88,10 @@ def test_state_machines_are_traced_and_fully_logged(research_pipeline_template):
         assert props["LoggingConfiguration"]["Level"] == "ALL"
 
 
-def test_schedules_are_off_until_the_first_runs_are_checked(research_pipeline_template):
+def test_schedules_are_on(research_pipeline_template):
     schedules = research_pipeline_template.find_resources("AWS::Scheduler::Schedule")
     assert len(schedules) == 2
-    assert {s["Properties"]["State"] for s in schedules.values()} == {"DISABLED"}
+    assert {s["Properties"]["State"] for s in schedules.values()} == {"ENABLED"}
     expressions = sorted(s["Properties"]["ScheduleExpression"] for s in schedules.values())
     assert expressions == ["cron(0 6 ? * THU *)", "cron(15 5 * * ? *)"]
 

@@ -117,7 +117,7 @@ def test_the_release_lambda_has_room_for_the_zip(template):
     assert props["EphemeralStorage"] == {"Size": 1024}
 
 
-def test_the_schedule_is_off_until_the_first_run_is_checked(template):
+def test_the_schedule_is_on(template):
     (schedule,) = template.find_resources("AWS::Scheduler::Schedule").values()
-    assert schedule["Properties"]["State"] == "DISABLED"
+    assert schedule["Properties"]["State"] == "ENABLED"
     assert schedule["Properties"]["ScheduleExpression"] == "cron(0 7 ? * MON *)"
