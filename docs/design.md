@@ -1,4 +1,4 @@
-# Design: polymer-research-lakehouse (working name)
+# Design: polymer-research-lakehouse
 
 Status: 6 October 2026. Built and running on AWS: both domains' loads, the
 data products on Fargate, Lake Formation governance, and the report with the
@@ -341,6 +341,15 @@ M0 needs no account, so the six-month clock starts only at M1.
   from the dbt manifest. GitHub Pages is not available for private
   repositories on a free plan, so the publish step runs once the repository is
   public; until then the page is a workflow artifact.
+- **A scoped CloudFormation execution policy (6 October 2026).** The CDK
+  bootstrap's default gives CloudFormation administrator access; it now runs
+  with `infra/bootstrap/cfn-execution-policy.json`. To test it, a new stack
+  tag forced an update of every taggable resource in all six stacks. The
+  first run failed on `GitHubDeploy`: updating tags also needs the tag *read*
+  actions (`iam:ListOpenIDConnectProviderTags`, `iam:ListRoleTags`), and the
+  rollback failed for the same reason, leaving the stack in
+  `UPDATE_ROLLBACK_FAILED`. With the two actions added, `continue-update-
+  rollback` finished the rollback and all six stacks updated.
 - **Step Functions waits about 60 seconds per Athena step.** The queries take
   1 to 2 seconds; the rest is how often the `.sync` integration checks a
   query. Five steps make a 5-minute run. That is fine for a daily batch, so it
@@ -398,7 +407,4 @@ M0 needs no account, so the six-month clock starts only at M1.
 The EEA download path was answered on 6 October 2026 (see Source 2).
 
 Athena on Lake Formation-governed Iceberg tables was answered on 6 October
-2026 (see Findings).
-
-1. **Name.** `polymer-research-lakehouse` is a working name; alternatives:
-   `polymer-rnd-data-mesh`, `materials-data-mesh-aws`.
+2026 (see Findings). No questions are open.
