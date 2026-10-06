@@ -58,8 +58,9 @@ CC0. Tests on 5 October 2026 established:
 
 Column sizes from the Parquet footers of six random files (share of all
 compressed bytes): abstracts 34.5%, authorships 10.5%, title 4.1%,
-primary_topic 0.8%, id 0.7%, SDG tags 0.2%. Each file is one row group, so
-Athena cannot skip row groups; it reads every selected column in full.
+primary_topic 0.8%, id 0.7%, SDG tags 0.2%. Files have one or a few row
+groups, and the subfield is not sorted, so Athena cannot skip row groups; it
+reads every selected column in full.
 
 ### Source 2: EEA industrial reporting (sustainability domain)
 
@@ -194,8 +195,8 @@ Free account plan: 100 USD credits (up to 200 USD), six months. Target: under
 
 | Item | Estimate |
 | --- | --- |
-| First backfill: Athena reads id, doi, title, dates, type, primary_topic, SDGs, open_access, citations, authorships (about 19% of 707 GB) | about 130 GB, 0.65 USD once |
-| Quarterly update (the September release rewrote about half the data) | 0.30 to 0.65 USD per release |
+| First backfill: Athena reads the staged columns, and only the institution fields inside `authorships` (8.0% of the bytes, measured on 6 October 2026) | about 57 GB, 0.28 USD once |
+| Quarterly update (the September release rewrote about half the data) | about 0.15 USD per release |
 | Daily API feed | 0.01 to 0.02 USD a day of the free API budget; Lambda free |
 | Fargate dbt run (0.25 vCPU, 0.5 GB, a few minutes) | under 0.10 USD a month |
 | Glue Spark job (2 DPU, a few minutes, per EEA version) | under 0.10 USD per run |
@@ -257,6 +258,23 @@ M0 needs no account, so the six-month clock starts only at M1.
   manifest and OpenLineage covers the same story.
 
 ## Findings so far
+
+- **Athena reads only what the stage selects (measured 6 October 2026).** On
+  the partition `updated_date=2026-05-22` (one 373 MB file, 303,880 works, 751
+  of them polymer works):
+  - the subfield filter scanned 0.30 MB: only the `primary_topic.subfield.id`
+    leaf, not the 3.2 MB struct;
+  - the full staging SELECT scanned 29.99 MB: the Parquet footer predicts
+    30.9 MB when Athena reads only the institution `id` and `country_code`
+    inside `authorships`, and 71.6 MB when it reads whole columns. So the
+    narrowed table definition halves the cost as well as hiding author
+    identities;
+  - the range predicate the stage uses (`> '2026-05-21' AND <= '2026-05-22'`)
+    scanned the same 29.99 MB as an equality on the date: partition
+    projection prunes ranges.
+
+  8.0% of the bytes, times the 707 GB snapshot, puts the first backfill at
+  about 57 GB, or 0.28 USD.
 
 - **Future publication dates.** A live run of the daily feed on 5 October 2026
   returned 1,670 works published since 5 September; 8 were dated in the
