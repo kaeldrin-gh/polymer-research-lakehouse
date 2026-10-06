@@ -111,16 +111,21 @@ class GovernanceStack(PipelineStack):
                 association.add_dependency(tag)
 
         # Lake Formation can vend file access only for registered locations.
-        # Hybrid: IAM principals keep their access to the same files.
+        # Hybrid: IAM principals keep their access to the same files. One at a
+        # time: each registration rewrites the service-linked role's S3 policy,
+        # and parallel registrations lost one bucket (docs/design.md, Findings).
+        previous: cdk.CfnResource = settings
         for domain in config.DOMAINS:
-            lakeformation.CfnResource(
+            location = lakeformation.CfnResource(
                 self,
                 f"Location{domain.title()}",
                 resource_arn="arn:aws:s3:::"
                 + config.bucket_name(domain, self.account, self.region),
                 use_service_linked_role=True,
                 hybrid_access_enabled=True,
-            ).add_dependency(settings)
+            )
+            location.add_dependency(previous)
+            previous = location
 
         self.reader = self._reader_role()
         for resource_type, permissions in (
@@ -150,28 +155,49 @@ class GovernanceStack(PipelineStack):
             for tag in tags:
                 grant.add_dependency(tag)
 
-        # Opt the reader in on every project database, so Lake Formation, not
-        # IAM, decides what it may read everywhere. CloudFormation has no
-        # resource for this, hence the SDK call.
+        # Opt the reader in on every project database and on all its tables,
+        # so Lake Formation, not IAM, decides what it may read everywhere. The
+        # database opt-in alone does not cover the tables (docs/design.md,
+        # Findings). CloudFormation has no resource for this, hence SDK calls.
         for database in DATABASE_TAGS:
-            call = {
-                "service": "LakeFormation",
-                "parameters": {
-                    "Principal": {"DataLakePrincipalIdentifier": self.reader.role_arn},
-                    "Resource": {"Database": {"CatalogId": catalog, "Name": database}},
-                },
-                "physical_resource_id": cr.PhysicalResourceId.of(f"opt-in-reader-{database}"),
-            }
-            opt_in = cr.AwsCustomResource(
-                self,
-                f"OptIn{database.title().replace('_', '')}",
-                on_create=cr.AwsSdkCall(action="createLakeFormationOptIn", **call),
-                on_delete=cr.AwsSdkCall(action="deleteLakeFormationOptIn", **call),
-                role=opt_in_role,
-                install_latest_aws_sdk=False,
-                log_group=opt_in_logs,
-            )
-            opt_in.node.add_dependency(settings)
+            name = database.title().replace("_", "")
+            for scope_name, resource in (
+                ("Database", {"Database": {"CatalogId": catalog, "Name": database}}),
+                (
+                    "Tables",
+                    {
+                        "Table": {
+                            "CatalogId": catalog,
+                            "DatabaseName": database,
+                            "TableWildcard": {},
+                        }
+                    },
+                ),
+            ):
+                call = {
+                    "service": "LakeFormation",
+                    "parameters": {
+                        "Principal": {"DataLakePrincipalIdentifier": self.reader.role_arn},
+                        "Resource": resource,
+                    },
+                    # Database opt-ins keep the ID they were first deployed
+                    # with, so CloudFormation does not replace them.
+                    "physical_resource_id": cr.PhysicalResourceId.of(
+                        f"opt-in-reader-{database}"
+                        if scope_name == "Database"
+                        else f"opt-in-reader-{database}-tables"
+                    ),
+                }
+                opt_in = cr.AwsCustomResource(
+                    self,
+                    f"OptIn{name}{scope_name if scope_name == 'Tables' else ''}",
+                    on_create=cr.AwsSdkCall(action="createLakeFormationOptIn", **call),
+                    on_delete=cr.AwsSdkCall(action="deleteLakeFormationOptIn", **call),
+                    role=opt_in_role,
+                    install_latest_aws_sdk=False,
+                    log_group=opt_in_logs,
+                )
+                opt_in.node.add_dependency(settings)
 
         cdk.CfnOutput(self, "ProductReaderRoleArn", value=self.reader.role_arn)
 

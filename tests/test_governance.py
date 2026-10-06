@@ -93,13 +93,30 @@ def test_the_domain_buckets_are_registered_in_hybrid_mode(template):
     assert {loc["UseServiceLinkedRole"] for loc in locations} == {True}
 
 
-def test_the_reader_is_opted_in_on_every_project_database(template):
-    opted = set()
+def _opt_ins(template):
     for resource in template.find_resources("Custom::AWS").values():
         create = resource["Properties"]["Create"]
         text = create if isinstance(create, str) else json.dumps(create)
+        if "Fn::Join" in text:
+            text = "".join(p if isinstance(p, str) else "<ref>" for p in create["Fn::Join"][1])
         assert "createLakeFormationOptIn" in text
-        for database in DATABASE_TAGS:
-            if f'\\"Name\\":\\"{database}\\"' in text or f'"Name":"{database}"' in text:
-                opted.add(database)
-    assert opted == set(DATABASE_TAGS)
+        yield json.loads(text)["parameters"]["Resource"]
+
+
+def test_the_reader_is_opted_in_on_every_database_and_all_its_tables(template):
+    databases, tables = set(), set()
+    for resource in _opt_ins(template):
+        if "Database" in resource:
+            databases.add(resource["Database"]["Name"])
+        else:
+            assert resource["Table"]["TableWildcard"] == {}
+            tables.add(resource["Table"]["DatabaseName"])
+    # A database opt-in alone does not cover its tables.
+    assert databases == tables == set(DATABASE_TAGS)
+
+
+def test_locations_register_one_at_a_time(template):
+    # Parallel registrations race on the service-linked role's S3 policy.
+    locations = template.find_resources("AWS::LakeFormation::Resource")
+    depends = [set(r.get("DependsOn", [])) & set(locations) for r in locations.values()]
+    assert sorted(len(d) for d in depends) == [0, 1, 1]
