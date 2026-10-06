@@ -68,10 +68,31 @@ The session refreshes for up to 12 hours; run `aws login` again after that.
 6. In the GitHub repository, add the secret `AWS_DEPLOY_ROLE_ARN` with that
    value (Settings > Secrets and variables > Actions).
 7. Push to `main`. CI now deploys `DataLake`, `ResearchPipeline`,
-   `SustainabilityPipeline`, `ProductsBuild` and `Governance`.
+   `SustainabilityPipeline`, `ProductsBuild`, `Governance` and `Monitor`.
 
 `GitHubDeploy` is never deployed from CI, so CI cannot change who may assume
 its role.
+
+### Connect the report and the run watch
+
+Both workflows assume their own role through GitHub OIDC; without the
+secret, each skips its AWS steps with a notice.
+
+1. Print the reader role's ARN:
+
+   ```bash
+   aws cloudformation describe-stacks --stack-name Governance --query "Stacks[0].Outputs" --profile prl
+   ```
+
+2. Add it as the repository secret `AWS_READER_ROLE_ARN`.
+3. Print the monitor role's ARN:
+
+   ```bash
+   aws cloudformation describe-stacks --stack-name Monitor --query "Stacks[0].Outputs" --profile prl
+   ```
+
+4. Add it as the repository secret `AWS_MONITOR_ROLE_ARN`.
+5. Run the `report` and `watch` workflows once from the Actions tab.
 
 ## Lake Formation
 
@@ -127,7 +148,34 @@ rebuild costs one backfill (48 GB scanned, about 0.24 USD, about 8 minutes).
 `MSYS_NO_PATHCONV=1` stops Git Bash on Windows from turning the parameter
 name into a file path.
 
+## When the run watch opens an issue
+
+The `watch` workflow opens an issue labeled `run-failure` when a state
+machine's newest run failed, timed out or was aborted, or when a schedule did
+not fire in time. While that issue is open, later findings are added to it as
+comments.
+
+1. Open the Step Functions console in us-east-1 (N. Virginia).
+2. Open the state machine the issue names, then its failed run.
+3. Select the red step to read its error and cause.
+4. Follow the step's link to its CloudWatch logs if the cause is unclear.
+5. Fix the cause; push code changes to `main`.
+6. Start the state machine again with the input `{}`.
+7. Close the issue once the run succeeds.
+
+A rerun is safe: each load moves its watermark last, so it starts from the
+same point, and the daily feed reads a 30-day window, so a missed day is
+covered by the next run. For a "did not fire in time" finding, check the
+schedule's state in the EventBridge Scheduler console.
+
 ## Without an AWS account
 
 Before M1 and after the free plan ends, CI runs every check except the deploy,
-which it skips with a notice.
+which it skips with a notice. The `report` workflow then builds from the
+committed samples but publishes only pages built from Athena, so the live
+page keeps its last build; the `watch` workflow skips its check.
+
+Each workflow skips its AWS steps only while its secret is missing. When the
+account closes, delete the secrets `AWS_DEPLOY_ROLE_ARN`,
+`AWS_READER_ROLE_ARN` and `AWS_MONITOR_ROLE_ARN`, or the workflows fail on
+the role they can no longer assume.

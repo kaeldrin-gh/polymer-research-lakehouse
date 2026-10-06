@@ -1,8 +1,9 @@
 # Design: polymer-research-lakehouse
 
-Status: 6 October 2026. Built and running on AWS: both domains' loads, the
-data products on Fargate, Lake Formation governance, and the report with the
-data product catalog. The findings section records what running it showed.
+Status: 6 October 2026. Built, public and running on AWS on its schedules:
+both domains' loads, the data products on Fargate, Lake Formation governance,
+the report with the data product catalog, and a daily run watch. The findings
+section records what running it showed.
 
 ## Objective
 
@@ -179,13 +180,29 @@ Components:
   The design changed from "a producer role per domain" to hybrid mode during
   the build: moving every pipeline role to Lake Formation grants would have
   re-tested every load for no gain the reader role does not already show.
-- **Lineage and catalog**: dbt emits OpenLineage events (`dbt-ol`) to S3; a
-  build step combines them with the dbt manifest (which holds the product
-  descriptors) into a static catalog page on GitHub Pages.
-- **Observability**: a CloudWatch dashboard (executions, Lambda errors, Athena
-  bytes scanned), log retention of 14 days, and a quality-results table. A
-  daily GitHub Actions workflow reads the last execution status and opens a
-  GitHub issue on failure. No email or SNS notifications.
+- **Lineage and catalog**: the dbt manifest holds the product descriptors
+  and the lineage. The report build turns it into a catalog on GitHub Pages:
+  per product its owner, contract, tests, the products it is built from, and
+  when it was last refreshed against its freshness target (from the Glue Data
+  Catalog). The dbt docs next to it draw the full lineage graph.
+
+  Planned and left out: OpenLineage events (`dbt-ol`) to S3. The manifest
+  already carries the same lineage, and nothing here would consume the
+  events.
+- **Observability**: Lambda, Glue, dbt and Step Functions logs (Step
+  Functions at level ALL, with X-Ray tracing), kept for 14 days. A daily
+  GitHub Actions workflow, the run watch (`monitor/watch.py`), assumes a
+  read-only `monitor` role through OIDC and reads the newest run of each
+  state machine. A failed, timed-out or aborted run, or a schedule that has
+  not fired within its interval, opens a GitHub issue (or comments on the
+  open one) and fails the workflow. The issue names the state machine, run
+  and error code, never an ARN, so the account ID stays out of a public
+  issue. No email or SNS notifications.
+
+  Planned and left out: a CloudWatch dashboard and a quality-results table.
+  The Step Functions console already shows every run, failed dbt tests fail
+  the build (and so the run the watch reads), and the report shows each
+  product's freshness.
 
 ### CI/CD
 
@@ -249,7 +266,7 @@ Guardrails, all in CDK:
 | M2 | Research domain: backfill, incremental MERGE, deletions, daily feed, Step Functions | Yes |
 | M3 | dbt on Fargate (dbt-athena) and DuckDB; quality checks; research products | Yes |
 | M4 | Sustainability domain (Glue job, SCD Type 2); Lake Formation tags and roles; shared product | Yes |
-| M5 | Lineage and catalog page, report on Pages, dashboard, README, screenshots | Partly |
+| M5 | Lineage and catalog page, report on Pages, run watch, README, screenshots | Partly |
 
 M0 needs no account, so the six-month clock starts only at M1.
 
@@ -266,8 +283,8 @@ M0 needs no account, so the six-month clock starts only at M1.
 - **Region eu-central-1 (Frankfurt).** Closer to the German market, but every
   OpenAlex read would cross regions. Rejected for cost and simplicity.
 - **AWS DataZone for the catalog.** Paid per user after its free tier and
-  heavy for one person. A static catalog page from the descriptors, the dbt
-  manifest and OpenLineage covers the same story.
+  heavy for one person. A static catalog page from the dbt manifest covers
+  the same story.
 
 ## Findings so far
 
@@ -339,8 +356,15 @@ M0 needs no account, so the six-month clock starts only at M1.
   reads the products from Athena, so the page can only show what Lake
   Formation lets that role see. The data product catalog on the page comes
   from the dbt manifest. GitHub Pages is not available for private
-  repositories on a free plan, so the publish step runs once the repository is
-  public; until then the page is a workflow artifact.
+  repositories on a free plan, so the publish step waited until the
+  repository went public (6 October 2026).
+- **Emission totals are not comparable across years.** Fewer countries
+  report chemical-industry releases in recent EEA releases: 27 in 2007, 22 in
+  2024, and 17 with a CO2 value in both 2019 and 2024. The raw totals fall
+  30% from 2019 to 2024; for those 17 countries the drop is 18%, so the rest
+  is countries that stopped appearing. The report's finding compares only
+  countries with a value in both years, and its emissions chart says the
+  totals are not like for like.
 - **A scoped CloudFormation execution policy (6 October 2026).** The CDK
   bootstrap's default gives CloudFormation administrator access; it now runs
   with `infra/bootstrap/cfn-execution-policy.json`. To test it, a new stack

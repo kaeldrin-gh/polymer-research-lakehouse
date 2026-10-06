@@ -53,3 +53,13 @@ STAGING_RETENTION_DAYS = 7
 
 # Scheduled loads; the first runs of each were checked by hand.
 SCHEDULES_ENABLED = True
+
+# The state machines the daily run watch checks, by name prefix (CDK names
+# them after their construct IDs), with the hours their schedule allows
+# between two runs plus some slack.
+WATCHED_STATE_MACHINES = {
+    "SnapshotLoad": 8 * 24,
+    "DailyFeed": 26,
+    "EeaReleaseLoad": 8 * 24,
+    "ProductsBuild": 26,
+}

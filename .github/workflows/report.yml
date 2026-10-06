@@ -21,6 +21,8 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      from-athena: ${{ steps.reader.outputs.configured }}
     permissions:
       contents: read
       id-token: write
@@ -74,9 +76,12 @@ jobs:
         with:
           path: site
 
+  # Only a page built from Athena is published: a build from the samples
+  # (no reader role, as after the account closes) must not replace the live
+  # page with sample numbers.
   deploy:
     needs: build
-    if: ${{ !github.event.repository.private }}
+    if: ${{ !github.event.repository.private && needs.build.outputs.from-athena == 'yes' }}
     runs-on: ubuntu-latest
     permissions:
       pages: write

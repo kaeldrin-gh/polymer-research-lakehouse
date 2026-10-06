@@ -1,0 +1,78 @@
+name: watch
+
+# The scheduled loads run on AWS, so a failed run shows up nowhere by itself.
+# This reads the latest run of every pipeline state machine, as a read-only
+# monitor role. A failed run, or a schedule that stopped firing, opens a
+# GitHub issue (or comments on the open one) and fails this workflow. No email
+# or SNS.
+
+on:
+  schedule:
+    # After the daily feed (05:15 UTC), the dbt build (06:00) and the report (07:30).
+    - cron: "0 8 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      issues: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          enable-cache: true
+
+      - name: Install
+        run: uv sync --locked --group athena
+
+      - name: Check for the monitor role
+        id: role
+        env:
+          ROLE_ARN: ${{ secrets.AWS_MONITOR_ROLE_ARN }}
+        run: |
+          if [ -n "$ROLE_ARN" ]; then
+            echo "configured=yes" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=no" >> "$GITHUB_OUTPUT"
+            echo "::notice::AWS_MONITOR_ROLE_ARN is not set - skipping the run watch."
+          fi
+
+      - uses: aws-actions/configure-aws-credentials@v6
+        if: steps.role.outputs.configured == 'yes'
+        with:
+          role-to-assume: ${{ secrets.AWS_MONITOR_ROLE_ARN }}
+          aws-region: us-east-1
+          mask-aws-account-id: true
+
+      - name: Check the latest runs
+        id: check
+        if: steps.role.outputs.configured == 'yes'
+        run: uv run python -m monitor.watch --report watch-report.md
+
+      - name: Open or update the issue
+        if: steps.check.outputs.problems == 'yes'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh label create run-failure --force --color B60205 \
+            --description "A scheduled pipeline run failed or did not run"
+          number=$(gh issue list --label run-failure --state open --json number --jq '.[0].number')
+          if [ -n "$number" ]; then
+            gh issue comment "$number" --body-file watch-report.md
+          else
+            gh issue create --title "Pipeline runs need attention" --label run-failure \
+              --body-file watch-report.md
+          fi
+
+      - name: Fail the workflow
+        if: steps.check.outputs.problems == 'yes'
+        run: |
+          echo "::error::Pipeline runs need attention; see the run-failure issue."
+          exit 1

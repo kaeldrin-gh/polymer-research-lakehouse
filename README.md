@@ -108,8 +108,9 @@ granted `tier=product` and nothing else:
 | Privacy by design | The OpenAlex table definition cannot select author names or ORCIDs; facility names, cities and coordinates are dropped before anything is stored |
 | Security | No access keys anywhere: GitHub OIDC with the immutable subject, `aws login` locally; cdk-nag fails the synth on any unexplained wildcard; CloudFormation deploys with a [scoped execution policy](infra/bootstrap/cfn-execution-policy.json), not administrator access |
 | Orchestration | Four Step Functions state machines; schedules in EventBridge Scheduler |
+| Monitoring | A daily run watch reads each state machine's newest run as a read-only role and opens a GitHub issue when one failed or its schedule stopped firing ([watch.py](monitor/watch.py)); the report shows each product's freshness against its target |
 | Containers | dbt in a Docker image on ECS Fargate, in a VPC with no NAT gateway and no inbound traffic |
-| Infrastructure as code | Six CDK stacks in Python with assertion tests (106 tests in all) |
+| Infrastructure as code | Seven CDK stacks in Python with assertion tests (122 tests in all) |
 
 ## The numbers
 
@@ -152,6 +153,9 @@ Account setup, deploys, Lake Formation checks and the rebuild procedure:
   `main` branch can assume.
 - **report** (daily): builds the page from Athena as the product-reader role
   and publishes it to GitHub Pages.
+- **watch** (daily): checks the newest run of every state machine as a
+  read-only monitor role; a failed run or a schedule that stopped firing
+  opens a GitHub issue and fails the workflow.
 
 ## Known limitations
 
@@ -159,8 +163,8 @@ Account setup, deploys, Lake Formation checks and the rebuild procedure:
   after that, CI keeps running everything except the deploy, and the page
   keeps its last build. Built to cost a few dollars in total.
 - **Not production.** One account for development and use, hybrid Lake
-  Formation mode (the pipeline roles are still governed by IAM), and no
-  alerting beyond failed workflow runs.
+  Formation mode (the pipeline roles are still governed by IAM), and alerts
+  as GitHub issues only.
 - **The OpenAlex API feed's window.** Works OpenAlex indexes late with old
   publication dates wait for the next quarterly snapshot.
 - **The EEA keeps only its newest release online**, so the revision history
@@ -170,13 +174,14 @@ Account setup, deploys, Lake Formation checks and the rebuild procedure:
 
 ```
 infra/               CDK app: data lake, research and sustainability pipelines,
-                     products build, governance, GitHub deploy role
+                     products build, governance, run-watch role, GitHub deploy role
 src/research/        OpenAlex loads: release planning, SQL, API feed, Lambda handlers
 src/sustainability/  EEA loads: release discovery, landing, SCD Type 2 SQL
 jobs/                Glue PySpark job
 dbt/                 dbt project (Athena and DuckDB targets), seeds, tests
 docker/dbt/          dbt image for ECS Fargate
 report/              report and data product catalog page
+monitor/             run watch: latest state machine runs, report for the issue
 sample/              committed samples of the real data
 scripts/             sample builders and loader
 docs/                design (with findings) and operations
