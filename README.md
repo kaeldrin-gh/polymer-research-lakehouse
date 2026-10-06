@@ -12,7 +12,8 @@ account opens at M1. See the [design](docs/design.md) for the plan.
 
 **Stack:** Python · PySpark · AWS CDK · S3 · Glue (Data Catalog, Spark jobs) ·
 Athena · Iceberg · Lambda · Step Functions · ECS Fargate · ECR · Docker ·
-EventBridge Scheduler · dbt (Athena, DuckDB) · GitHub Actions (OIDC) · uv · ruff
+EventBridge Scheduler · Lake Formation · dbt (Athena, DuckDB) ·
+GitHub Actions (OIDC) · uv · ruff
 
 ## What exists now
 
@@ -45,6 +46,12 @@ EventBridge Scheduler · dbt (Athena, DuckDB) · GitHub Actions (OIDC) · uv · 
   a state machine runs the task and waits for it. The task runs in a VPC with
   public subnets only and no NAT gateway, accepts no inbound traffic, and can
   write only under each domain bucket's `dbt/` prefix.
+- `Governance` stack: Lake Formation in hybrid access mode. Tags `domain` and
+  `tier` on every database; a `product-reader` role sees `tier=product` tables
+  only, with file access vended by Lake Formation and no S3 permission of its
+  own. Staging and raw tables are refused by Lake Formation. The pipeline
+  roles stay on IAM, with data location access only on the buckets they
+  create tables in.
 - `GitHubDeploy` stack: an OIDC role that only this repository's `main` branch
   can assume, and that can only assume the CDK bootstrap roles. No access keys.
 - dbt project (`dbt/`): staging views per domain and the data products, all

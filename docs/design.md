@@ -167,10 +167,18 @@ Components:
 - **Transformations (dbt on ECS Fargate)**: a Docker image with dbt-athena,
   built in CI and stored in ECR. Step Functions runs it as a Fargate task after
   each load. The same dbt project runs on DuckDB with sample data in CI.
-- **Governance (Lake Formation)**: LF-tags `domain` and `tier`
-  (`raw`, `product`). Each domain has a producer role that can write only its
-  own databases; an analyst role can read only `tier=product`. All grants are
-  CDK code.
+- **Governance (Lake Formation, hybrid access mode)**: LF-tags `domain`
+  (research, sustainability, shared) and `tier` (product, staging, raw) on the
+  Glue databases; tables inherit them, including the ones dbt creates later. A
+  `product-reader` role is opted in to Lake Formation and granted SELECT on
+  `tier=product` only; it has no S3 permission on the data buckets, so Lake
+  Formation vends it temporary access to the files it may read. The pipeline
+  roles stay on IAM (hybrid mode), so governance cannot break a load. All
+  grants are CDK code (`infra/stacks/governance.py`).
+
+  The design changed from "a producer role per domain" to hybrid mode during
+  the build: moving every pipeline role to Lake Formation grants would have
+  re-tested every load for no gain the reader role does not already show.
 - **Lineage and catalog**: dbt emits OpenLineage events (`dbt-ol`) to S3; a
   build step combines them with the dbt manifest (which holds the product
   descriptors) into a static catalog page on GitHub Pages.
@@ -302,6 +310,25 @@ M0 needs no account, so the six-month clock starts only at M1.
   seconds in all, about 30 seconds of it starting the task and pulling the
   image, and the same result as the laptop run (49 passed, 1 warning). At
   0.5 vCPU and 1 GB for about two minutes, a run costs about 0.002 USD.
+- **Lake Formation in hybrid mode works, after three surprises (6 October
+  2026).** As the `product-reader` role, every `tier=product` table is
+  readable (`research.works`, 859,181 rows; `products.research_vs_emissions`,
+  473 rows) and staging and raw are refused by Lake Formation itself:
+  "Insufficient Lake Formation permission(s): Required Describe on
+  research_staging". Tables dbt recreates stay governed. On the way:
+  - **A database opt-in does not cover its tables.** Athena kept checking the
+    reader's own S3 permissions until the reader was also opted in on each
+    database's tables (`TableWildcard`).
+  - **Parallel location registrations race.** Each registration rewrites the
+    S3 policy of Lake Formation's service-linked role; registering the three
+    buckets at once left one bucket out. The stack now registers them one at
+    a time, and the products bucket was registered again by hand.
+  - **Registering a location changes table creation for everyone.** Creating
+    a table in a registered location needs Lake Formation's data location
+    access, also for IAM principals in hybrid mode: dbt's seed failed until
+    the table-creating roles (snapshot load, daily feed, Glue job, dbt task)
+    were granted it, per bucket. After that the dbt build and the daily feed
+    passed again.
 - **Step Functions waits about 60 seconds per Athena step.** The queries take
   1 to 2 seconds; the rest is how often the `.sync` integration checks a
   query. Five steps make a 5-minute run. That is fine for a daily batch, so it
@@ -358,8 +385,8 @@ M0 needs no account, so the six-month clock starts only at M1.
 
 The EEA download path was answered on 6 October 2026 (see Source 2).
 
-1. **Athena on Lake Formation-governed Iceberg tables.** Lake Formation adds
-   permission checks to every Athena and Glue call; test early in M2 so the
-   grants model is right before the domains grow.
-2. **Name.** `polymer-research-lakehouse` is a working name; alternatives:
+Athena on Lake Formation-governed Iceberg tables was answered on 6 October
+2026 (see Findings).
+
+1. **Name.** `polymer-research-lakehouse` is a working name; alternatives:
    `polymer-rnd-data-mesh`, `materials-data-mesh-aws`.

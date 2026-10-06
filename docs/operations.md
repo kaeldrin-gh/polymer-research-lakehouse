@@ -59,6 +59,33 @@ The session refreshes for up to 12 hours; run `aws login` again after that.
 `GitHubDeploy` is never deployed from CI, so CI cannot change who may assume
 its role.
 
+## Lake Formation
+
+### Make yourself a Lake Formation administrator
+
+The stack adds the CDK deploy role as an administrator, not your IAM user, so
+the Lake Formation console hides tags, grants and opt-ins from you until you
+add yourself (once). The settings use APPEND, so a later deploy keeps you.
+
+1. Open the Lake Formation console in `us-east-1`.
+2. Open Administration > Administrative roles and tasks.
+3. Add your IAM user as a data lake administrator.
+
+### Check what the product reader can see
+
+1. Assume the reader role:
+
+   ```bash
+   aws sts assume-role --profile prl --role-arn arn:aws:iam::<account>:role/polymer-research-lakehouse-product-reader --role-session-name check
+   ```
+
+2. Export the three credential values from the answer.
+3. In Athena (workgroup `polymer-research-lakehouse`), query a product, for
+   example `SELECT count(*) FROM products.research_vs_emissions`: it works.
+4. Query a staging view, for example
+   `SELECT count(*) FROM research_staging.stg_research__works`: Lake
+   Formation refuses it.
+
 ## Rebuild research.works
 
 Needed after a change to the table's columns: the MERGE only updates a row
