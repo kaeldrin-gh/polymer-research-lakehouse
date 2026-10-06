@@ -23,6 +23,10 @@ WORK_COLUMNS: list[tuple[str, str]] = [
     ("type", "string"),
     ("language", "string"),
     ("is_retracted", "boolean"),
+    # OpenAlex's expansion set: works from newer sources with thinner metadata,
+    # hidden from its API and website by default. Kept and flagged here; the
+    # dbt products leave them out (docs/design.md, Findings).
+    ("is_xpac", "boolean"),
     ("topic_id", "string"),
     ("topic_name", "string"),
     ("topic_score", "double"),
@@ -118,6 +122,7 @@ def stage_snapshot(bucket: str, run_id: str, after: str, until: str) -> str:
   w.type,
   w.language,
   w.is_retracted,
+  coalesce(w.is_xpac, false) AS is_xpac,
   w.primary_topic.id AS topic_id,
   w.primary_topic.display_name AS topic_name,
   CAST(w.primary_topic.score AS double) AS topic_score,
@@ -151,6 +156,7 @@ def stage_api(bucket: str, run_id: str, fetch_date: str) -> str:
   a.type,
   a.language,
   a.is_retracted,
+  coalesce(a.is_xpac, false) AS is_xpac,
   a.topic_id,
   a.topic_name,
   a.topic_score,

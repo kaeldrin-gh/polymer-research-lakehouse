@@ -27,6 +27,7 @@ OPENALEX_WORKS_COLUMNS: list[tuple[str, str]] = [
     ("type", "string"),
     ("language", "string"),
     ("is_retracted", "boolean"),
+    ("is_xpac", "boolean"),
     (
         "primary_topic",
         "struct<id:string,display_name:string,score:float,"
@@ -54,6 +55,7 @@ API_WORKS_COLUMNS: list[tuple[str, str]] = [
     ("type", "string"),
     ("language", "string"),
     ("is_retracted", "boolean"),
+    ("is_xpac", "boolean"),
     ("topic_id", "string"),
     ("topic_name", "string"),
     ("topic_score", "double"),

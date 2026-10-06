@@ -2,7 +2,9 @@ version: 2
 
 models:
   - name: int_research__countable_works
-    description: "Works the research products count: not retracted, plausible publication year."
+    description: >
+      Works the research products count: not retracted, not in OpenAlex's xpac expansion
+      set (which OpenAlex hides by default), plausible publication year.
     columns:
       - name: work_id
         data_tests: [unique, not_null]
@@ -18,3 +20,19 @@ models:
     columns:
       - name: country_code
         data_tests: [not_null]
+
+unit_tests:
+  - name: countable_works_follow_openalex_defaults
+    description: Retracted works, xpac works and works without a plausible year are left out.
+    model: int_research__countable_works
+    given:
+      - input: ref('stg_research__works')
+        rows:
+          - {work_id: W1, publication_year: 2025, is_retracted: false, is_xpac: false, is_beyond_current_year: false}
+          - {work_id: W2, publication_year: 2025, is_retracted: false, is_xpac: true, is_beyond_current_year: false}
+          - {work_id: W3, publication_year: 2025, is_retracted: true, is_xpac: false, is_beyond_current_year: false}
+          - {work_id: W4, publication_year: 2030, is_retracted: false, is_xpac: false, is_beyond_current_year: true}
+          - {work_id: W5, publication_year: null, is_retracted: false, is_xpac: false, is_beyond_current_year: false}
+    expect:
+      rows:
+        - {work_id: W1}

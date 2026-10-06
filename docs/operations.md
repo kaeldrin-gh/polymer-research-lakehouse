@@ -59,6 +59,33 @@ The session refreshes for up to 12 hours; run `aws login` again after that.
 `GitHubDeploy` is never deployed from CI, so CI cannot change who may assume
 its role.
 
+## Rebuild research.works
+
+Needed after a change to the table's columns: the MERGE only updates a row
+when OpenAlex changed the work, so existing rows would keep the old shape. The
+rebuild costs one backfill (48 GB scanned, about 0.24 USD, about 8 minutes).
+
+1. Deploy the change (push to `main`).
+2. Drop the table in Athena (workgroup `polymer-research-lakehouse`):
+
+   ```sql
+   DROP TABLE research.works
+   ```
+
+3. Delete the snapshot watermark:
+
+   ```bash
+   MSYS_NO_PATHCONV=1 aws ssm delete-parameter --name /polymer-research-lakehouse/research/snapshot-watermark --profile prl
+   ```
+
+4. Start the `SnapshotLoad` state machine. With no watermark it loads every
+   partition up to the newest release.
+5. Start the `DailyFeed` state machine, so recent works newer than the
+   snapshot come back.
+
+`MSYS_NO_PATHCONV=1` stops Git Bash on Windows from turning the parameter
+name into a file path.
+
 ## Without an AWS account
 
 Before M1 and after the free plan ends, CI runs every check except the deploy,

@@ -44,7 +44,8 @@ DuckDB · GitHub Actions (OIDC) · uv · ruff
   can assume, and that can only assume the CDK bootstrap roles. No access keys.
 - dbt project (`dbt/`): staging views per domain and the data products, all
   with enforced contracts, data tests and unit tests:
-  - research: `works_by_country_year`, `topic_trends`;
+  - research: `works_by_country_year`, `topic_trends` (without OpenAlex's
+    xpac works, as on openalex.org; `research.works` keeps them, flagged);
   - sustainability: `chemical_sector_by_country_year` (with polymer
     production plants, E-PRTR 4(a)(viii), separately), `air_release_revisions`;
   - shared: `research_vs_emissions`, which joins the two domains' products

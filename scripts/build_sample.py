@@ -37,6 +37,8 @@ def sample_url(page: int) -> str:
             "per_page": openalex_api.PER_PAGE,
             "page": page,
             "select": openalex_api.SELECT_FIELDS,
+            # Like the pipeline: xpac works too, so the sample has both kinds.
+            "include_xpac": "true",
         }
     )
     return f"{openalex_api.API_URL}?{query}"

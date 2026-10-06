@@ -10,6 +10,10 @@ models:
         description: Publication date after the as-of date (today unless pinned).
       - name: is_beyond_current_year
         description: Publication year after the as-of year; left out of per-year products.
+      - name: is_xpac
+        description: >
+          In OpenAlex's xpac expansion set: works from newer sources with thinner metadata,
+          hidden from its API and website by default. Kept here, left out of the products.
 
 unit_tests:
   - name: future_dates_are_flagged_against_the_as_of_date
@@ -37,7 +41,8 @@ unit_tests:
           select
               id, null::varchar as doi, null::varchar as title, publication_date,
               publication_year, 'article' as type, 'en' as language,
-              false as is_retracted, null::varchar as topic_id, null::varchar as topic_name,
+              false as is_retracted, false as is_xpac,
+              null::varchar as topic_id, null::varchar as topic_name,
               null::double as topic_score, sdg_ids, false as is_oa,
               null::varchar as oa_status, 0 as cited_by_count, null::double as fwci,
               []::varchar[] as institution_ids, country_codes,

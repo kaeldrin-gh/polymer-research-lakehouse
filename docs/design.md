@@ -293,8 +293,34 @@ M0 needs no account, so the six-month clock starts only at M1.
   them dissertations dated by their embargo end. Rule, in dbt: a date later in
   the current year counts; a later year is flagged, left out of per-year
   products and listed by a warning test.
-- **Works without a publication year.** 6 of the 3,000 sampled works have
-  none; per-year products leave them out.
+- **Works without a publication year.** A few sampled works have none (33 of
+  the 3,000 in the current sample); per-year products leave them out.
+- **xpac works: the snapshot and the API disagree by default (6 October
+  2026).** The first backfill loaded 858,835 polymer works, while the API
+  reported 808,025 for the same subfield. The difference is OpenAlex's *xpac*
+  ("expansion pack") set: works from newer sources with thinner metadata,
+  mostly articles and dissertations. OpenAlex's API and website hide them
+  unless asked (`include_xpac=true`); the snapshot contains everything and
+  marks them with `is_xpac`. In the polymer subfield the API counts 808,025
+  works without xpac and 895,909 with it.
+
+  Left alone, the two loads would deliver different sets: the snapshot with
+  xpac works, the daily feed without. The decision:
+  - **Keep them, flagged.** `research.works` has an `is_xpac` column; the
+    snapshot stage reads it (3 KB per file) and the daily feed asks the API
+    for xpac works too, so both loads deliver the same set. Nothing is lost
+    if a consumer wants them later.
+  - **The products follow OpenAlex's default.** `int_research__countable_works`
+    leaves xpac works out, so the research products count what anyone sees on
+    openalex.org. A dbt unit test pins the rule.
+  - Dropping xpac works at load time was the alternative: simpler, but the
+    data would be gone, and the table would no longer be a complete copy of
+    the subfield.
+
+  Adding the column needed a rebuild of `research.works`: an existing row only
+  changes when OpenAlex changes the work, so a re-run would not fill the new
+  column. The rebuild is a dropped table, a deleted watermark and a fresh
+  backfill (`docs/operations.md`, about 0.24 USD).
 - **CDK's Athena task grants too much.** Without its own result location (the
   workgroup enforces one), `AthenaStartQueryExecution` grants S3 writes on
   every bucket. The state machines use the raw `.sync` integration with

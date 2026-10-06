@@ -20,7 +20,7 @@ API_URL = "https://api.openalex.org/works"
 PER_PAGE = 200
 # Top-level fields only; `authorships` is reduced to institutions below.
 SELECT_FIELDS = (
-    "id,doi,title,publication_date,publication_year,type,language,is_retracted,"
+    "id,doi,title,publication_date,publication_year,type,language,is_retracted,is_xpac,"
     "primary_topic,sustainable_development_goals,open_access,cited_by_count,fwci,"
     "authorships,created_date,updated_date"
 )
@@ -53,6 +53,8 @@ def page_url(from_date: str, cursor: str) -> str:
             "select": SELECT_FIELDS,
             "per_page": PER_PAGE,
             "cursor": cursor,
+            # The API hides xpac works unless asked; the snapshot has them all.
+            "include_xpac": "true",
         }
     )
     return f"{API_URL}?{query}"
@@ -104,6 +106,7 @@ def to_landing_record(work: dict) -> dict:
         "type": work.get("type"),
         "language": work.get("language"),
         "is_retracted": work.get("is_retracted"),
+        "is_xpac": work.get("is_xpac"),
         "topic_id": topic.get("id"),
         "topic_name": topic.get("display_name"),
         "topic_score": topic.get("score"),

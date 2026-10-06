@@ -13,6 +13,7 @@ select
     type as work_type,
     language,
     coalesce(is_retracted, false) as is_retracted,
+    coalesce(is_xpac, false) as is_xpac,
     topic_id,
     topic_name,
     topic_score,

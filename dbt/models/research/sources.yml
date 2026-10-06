@@ -26,6 +26,12 @@ sources:
             description: When OpenAlex last changed the work; the MERGE keeps the newest.
             data_tests:
               - not_null
+          - name: is_xpac
+            description: >
+              In OpenAlex's xpac expansion set, which its API and website hide by default.
+              Both loads keep these works; the products leave them out.
+            data_tests:
+              - not_null
           - name: source
             description: Which load wrote the current row.
             data_tests:

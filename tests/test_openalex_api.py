@@ -19,6 +19,7 @@ WORK = {
     "type": "article",
     "language": "en",
     "is_retracted": False,
+    "is_xpac": True,
     "primary_topic": {
         "id": "https://openalex.org/T1",
         "display_name": "Polyurethane chemistry",
@@ -75,6 +76,7 @@ def test_landing_record_matches_the_staging_columns():
     record = openalex_api.to_landing_record(WORK)
     assert list(record) == [c for c in COLUMN_NAMES if c not in ("source", "loaded_at")]
     assert record["topic_id"] == "https://openalex.org/T1"
+    assert record["is_xpac"] is True
     assert record["sdg_ids"] == ["https://metadata.un.org/sdg/12"]
     assert record["created_date"] == "2026-09-13T00:00:00.000000"
     assert record["updated_date"] == "2026-09-23T05:00:35.095934"
@@ -105,6 +107,9 @@ def test_paging_follows_the_cursor_until_it_runs_out():
     assert [w["id"] for w in works] == ["1", "2", "3"]
     assert seen[0]["filter"] == ["primary_topic.subfield.id:2507,from_publication_date:2026-09-05"]
     assert seen[0]["per_page"] == ["200"]
+    # Without this the API hides xpac works, which the snapshot includes.
+    assert seen[0]["include_xpac"] == ["true"]
+    assert "is_xpac" in seen[0]["select"][0].split(",")
 
 
 def test_runaway_paging_stops():

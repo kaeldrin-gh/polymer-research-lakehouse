@@ -114,3 +114,11 @@ def test_unsafe_names_are_rejected(bucket, run_id):
 def test_an_empty_partition_range_is_rejected():
     with pytest.raises(ValueError):
         sql.stage_snapshot(BUCKET, RUN, "2026-09-23", "2026-09-23")
+
+
+def test_both_flows_keep_xpac_works_flagged_not_dropped():
+    snapshot = sql.stage_snapshot(BUCKET, RUN, "2026-06-25", "2026-09-23")
+    api = sql.stage_api(BUCKET, RUN, "2026-10-05")
+    assert "coalesce(w.is_xpac, false) AS is_xpac" in snapshot
+    assert "coalesce(a.is_xpac, false) AS is_xpac" in api
+    assert "is_xpac" not in snapshot.split("WHERE", 1)[1]
