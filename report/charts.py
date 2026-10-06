@@ -83,21 +83,58 @@ function scatter(t, width) {
   }));
 }
 
-function topics(t, width) {
-  const rows = data.topics;
-  return Plot.plot(frame(t, width, 28 + rows.length * 26, {
-    marginLeft: Math.min(300, width * 0.45), marginRight: 56, marginBottom: 24,
-    x: { grid: true, label: null, nice: true },
-    y: { domain: rows.map((d) => d.topic_name), label: null, tickSize: 0 },
+// Europe against every country; the world line is the muted reference.
+function openaccess(t, width) {
+  const rows = data.open_access.flatMap((d) => [
+    { year: d.year, series: "Europe", share: d.europe },
+    { year: d.year, series: "all countries", share: d.world },
+  ]).filter((d) => d.share != null);
+  const last = data.open_access[data.open_access.length - 1];
+  return Plot.plot(frame(t, width, 280, {
+    marginRight: 104,
+    x: { label: null, tickFormat: (d) => `${d}` },
+    y: { label: null, domain: [0, 1], grid: true, ticks: 5, tickFormat: pct },
+    color: { domain: ["Europe", "all countries"], range: [t.s1, t.muted] },
     marks: [
-      Plot.barX(rows, { x: "works", y: "topic_name", fill: t.s1, insetTop: 4, insetBottom: 4,
-                        rx: 2 }),
-      Plot.ruleX([0], { stroke: t.baseline }),
-      Plot.text(rows, { x: "works", y: "topic_name", dx: 6, textAnchor: "start", fill: t.ink,
-                        text: (d) => pct(d.share_of_year) }),
-      Plot.tip(rows, Plot.pointerY({ x: "works", y: "topic_name",
-        title: (d) => `${d.topic_name}\\n${fmt(d.works)} works in ${data.last_year}, `
-          + `${pct(d.share_of_year)} of the year` })),
+      Plot.lineY(rows, { x: "year", y: "share", stroke: "series", strokeWidth: 2 }),
+      Plot.ruleY([0], { stroke: t.baseline }),
+      Plot.text([last], { x: "year", y: "europe", dx: 8, textAnchor: "start", fill: t.ink,
+                          text: (d) => `Europe ${pct(d.europe)}` }),
+      Plot.text([last], { x: "year", y: "world", dx: 8, textAnchor: "start", fill: t.secondary,
+                          text: (d) => `all ${pct(d.world)}` }),
+      Plot.tip(data.open_access, Plot.pointerX({ x: "year", y: "europe",
+        title: (d) => `${d.year}\\nEurope ${pct(d.europe)} open access\\n`
+          + `all countries ${pct(d.world)}` })),
+    ],
+  }));
+}
+
+// Dumbbells: each topic's share then (ring) and now (dot), biggest gain first.
+function topics(t, width) {
+  const rows = data.topic_shift;
+  const max = Math.max(...rows.flatMap((d) => [d.share, d.share_before]), 0.01);
+  const pp = (d) => `${d.change >= 0 ? "+" : "−"}${Math.abs(d.change * 100).toFixed(1)} pp`;
+  const marginLeft = Math.min(300, width * 0.45);
+  return Plot.plot(frame(t, width, 36 + rows.length * 28, {
+    marginLeft, marginRight: 72, marginBottom: 24,
+    x: { grid: true, label: null, domain: [0, max * 1.05], ticks: 5, tickFormat: pct },
+    y: { domain: rows.map((d) => d.topic_name), label: null, axis: null },
+    marks: [
+      // Long names are cut with an ellipsis on narrow screens; the tip has them in full.
+      Plot.axisY({ tickSize: 0, label: null, textOverflow: "ellipsis",
+                   lineWidth: (marginLeft - 12) / 13 }),
+      Plot.link(rows, { x1: "share_before", x2: "share", y1: "topic_name", y2: "topic_name",
+                        stroke: t.baseline, strokeWidth: 2 }),
+      Plot.dot(rows, { x: "share_before", y: "topic_name", r: 5, fill: t.surface,
+                       stroke: t.muted, strokeWidth: 2 }),
+      Plot.dot(rows, { x: "share", y: "topic_name", r: 5, fill: t.s1, stroke: t.surface,
+                       strokeWidth: 2 }),
+      Plot.text(rows, { y: "topic_name", frameAnchor: "right", dx: 64, textAnchor: "end",
+                        fill: t.ink, text: pp }),
+      Plot.tip(rows, Plot.pointerY({ x: "share", y: "topic_name",
+        title: (d) => `${d.topic_name}\\n${data.topic_base_year}: ${pct(d.share_before)} `
+          + `(${fmt(d.works_before)} works)\\n${data.last_year}: ${pct(d.share)} `
+          + `(${fmt(d.works)} works)\\n${pp(d)}` })),
     ],
   }));
 }
@@ -131,7 +168,7 @@ function render() {
   const t = tokens();
   const el = (id) => document.getElementById(id);
   if (el("chart-countries")) countries(t, el("chart-countries"));
-  const draw = { scatter, topics, emissions };
+  const draw = { openaccess, scatter, topics, emissions };
   for (const [name, fn] of Object.entries(draw)) {
     const node = el(`chart-${name}`);
     if (node) node.replaceChildren(fn(t, Math.max(node.clientWidth, 300)));

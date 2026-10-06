@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import os
 import time
+from datetime import datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -28,6 +29,22 @@ class Products:
 
     def query(self, sql: str) -> list[dict]:
         return self.run(sql)
+
+    def updated_at(self, names: list[str]) -> dict[str, datetime]:
+        """When each table was last written, from the Glue Data Catalog. dbt
+        recreates its tables on every build, and every Iceberg commit updates
+        the entry. The DuckDB samples have no such history, so none there."""
+        if not hasattr(self, "client"):
+            return {}
+        import boto3
+
+        glue = boto3.client("glue", region_name="us-east-1")
+        times = {}
+        for name in names:
+            database, table = name.split(".", 1)
+            entry = glue.get_table(DatabaseName=database, Name=table)["Table"]
+            times[name] = entry.get("UpdateTime") or entry["CreateTime"]
+        return times
 
     def _duckdb(self, sql: str) -> list[dict]:
         cursor = self.conn.execute(sql)

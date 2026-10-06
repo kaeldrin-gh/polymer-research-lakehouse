@@ -1,16 +1,34 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
+
 from report import build, catalog
 
 # Athena returns every value as a string; DuckDB returns numbers.
 RAW = {
-    "works": [{"works": "785851", "works_last_year": "30126"}],
+    "works": [{"works": "785851", "works_last_year": "30126", "works_base_year": "25385"}],
     "eea": [{"version": "16", "last_year": "2024"}],
     "countries": [
         {"country_code": "DE", "publication_year": "2024", "works": "650"},
         {"country_code": "DE", "publication_year": "2025", "works": "709"},
         {"country_code": "FR", "publication_year": "2025", "works": 969},
         {"country_code": "NL", "publication_year": "2025", "works": 120},
+    ],
+    "open_access": [
+        {
+            "publication_year": "2025",
+            "europe_works": "1000",
+            "europe_open_access": "696",
+            "all_works": "2000",
+            "all_open_access": "1026",
+        },
+        {
+            "publication_year": "2010",
+            "europe_works": "1000",
+            "europe_open_access": "229",
+            "all_works": "0",
+            "all_open_access": "0",
+        },
     ],
     "scatter": [
         {
@@ -32,15 +50,86 @@ RAW = {
             "sdg_tagged_share": "0.39",
         },
     ],
-    "topics": [{"topic_name": "Composites", "works": "5336", "share_of_year": "0.1774"}],
+    "topics": [
+        {
+            "topic_name": "Composites",
+            "publication_year": "2015",
+            "works": "2826",
+            "share_of_year": "0.1114",
+        },
+        {
+            "topic_name": "Composites",
+            "publication_year": "2025",
+            "works": "5336",
+            "share_of_year": "0.1774",
+        },
+        {
+            "topic_name": "Textiles",
+            "publication_year": "2015",
+            "works": "4281",
+            "share_of_year": "0.1687",
+        },
+        {
+            "topic_name": "Textiles",
+            "publication_year": "2025",
+            "works": "3093",
+            "share_of_year": "0.1028",
+        },
+        # New since the base year: compared against zero.
+        {
+            "topic_name": "Recycling",
+            "publication_year": "2025",
+            "works": "900",
+            "share_of_year": "0.03",
+        },
+        # Below the share threshold in both years: left out.
+        {
+            "topic_name": "Niche",
+            "publication_year": "2015",
+            "works": "10",
+            "share_of_year": "0.001",
+        },
+        {
+            "topic_name": "Niche",
+            "publication_year": "2025",
+            "works": "30",
+            "share_of_year": "0.019",
+        },
+    ],
     "emissions": [
         {
             "year": "2024",
             "chemical_co2_tonnes": "73745580.4",
             "polymer_co2_tonnes": None,
             "polymer_facilities": "59",
+            "countries": "22",
         }
     ],
+    "country_emissions": [
+        {"country_code": "DE", "reporting_year": "2019", "chemical_co2_tonnes": "20000000"},
+        {"country_code": "DE", "reporting_year": "2024", "chemical_co2_tonnes": "15000000"},
+        {"country_code": "FR", "reporting_year": "2019", "chemical_co2_tonnes": "10000000"},
+        {"country_code": "FR", "reporting_year": "2024", "chemical_co2_tonnes": "9000000"},
+        # Reported only in the base year: not compared.
+        {"country_code": "GB", "reporting_year": "2019", "chemical_co2_tonnes": "8000000"},
+        # Confidential in the latest year: not compared.
+        {"country_code": "NL", "reporting_year": "2019", "chemical_co2_tonnes": "5000000"},
+        {"country_code": "NL", "reporting_year": "2024", "chemical_co2_tonnes": None},
+    ],
+}
+
+PRODUCT = {
+    "name": "products.research_vs_emissions",
+    "kind": "model",
+    "domain": "shared",
+    "owner": "data office",
+    "freshness_sla_hours": None,
+    "description": "Research <next to> emissions",
+    "contract": True,
+    "tests": 1,
+    "built_from": [],
+    "upstream_products": ["research.works_by_country_year"],
+    "columns": [{"name": "year", "type": "bigint", "description": ""}],
 }
 
 
@@ -49,6 +138,7 @@ def test_shape_converts_strings_and_orders_by_size():
     assert payload["overview"] == {
         "works": 785851,
         "works_last_year": 30126,
+        "works_base_year": 25385,
         "eea_version": 16,
         "eea_last_year": 2024,
     }
@@ -64,29 +154,81 @@ def test_shape_converts_strings_and_orders_by_size():
     assert payload["scatter_year"] == 2024
     # A missing (confidential) total is drawn as zero, not dropped.
     assert payload["emissions"][0]["polymer_co2_tonnes"] == 0.0
+    assert payload["emissions"][0]["countries"] == 22
+
+
+def test_open_access_is_a_share_per_year_and_none_without_works():
+    assert build.shape(RAW, 2025)["open_access"] == [
+        {"year": 2010, "europe": 0.229, "world": None},
+        {"year": 2025, "europe": 0.696, "world": 0.513},
+    ]
+
+
+def test_topic_shift_orders_by_gain_and_drops_small_topics():
+    payload = build.shape(RAW, 2025)
+    shift = {t["topic_name"]: t for t in payload["topic_shift"]}
+    assert list(shift) == ["Composites", "Recycling", "Textiles"]
+    assert round(shift["Composites"]["change"], 4) == 0.066
+    assert (shift["Recycling"]["share_before"], shift["Recycling"]["works_before"]) == (0.0, 0)
+    assert payload["topic_base_year"] == 2015
+
+
+def test_like_for_like_compares_only_countries_reported_in_both_years():
+    e = build.shape(RAW, 2025)["like_for_like"]
+    assert (e["base_year"], e["year"], e["countries"]) == (2019, 2024, 2)
+    assert (e["before"], e["after"]) == (30_000_000.0, 24_000_000.0)
+    assert round(e["change"], 2) == -0.2
+
+
+def test_findings_state_the_numbers_behind_them():
+    found = build.findings(build.shape(RAW, 2025))
+    assert [f["value"] for f in found] == ["↑ 19%", "70%", "+6.6 pp", "↓ 20%"]
+    assert found[0]["text"].startswith("more polymer and plastics works published in 2025")
+    assert "up from 23% in 2010; 51% worldwide" in found[1]["text"]
+    assert found[2]["text"].startswith("Composites: the fastest-growing topic, from 11% to 18%")
+    assert found[3]["text"].endswith("in the 2 countries that reported both years.")
+
+
+def test_findings_skip_what_the_data_cannot_support():
+    raw = {
+        **RAW,
+        "works": [{"works": "3000", "works_last_year": "300", "works_base_year": "0"}],
+        "open_access": [],
+        "topics": [],
+        "country_emissions": [],
+    }
+    payload = build.shape(raw, 2025)
+    assert build.findings(payload) == []
+    # No findings, no empty section.
+    assert "What the data shows" not in build.render(payload, [])
+
+
+def test_freshness_is_checked_against_the_target():
+    built = datetime(2026, 10, 7, 8, 0, tzinfo=UTC)
+    entry = {"freshness_sla_hours": 48}
+    assert build._freshness(entry, built - timedelta(hours=2), built) == (
+        "<span class='ok'>✓ refreshed 2 h ago</span>, target 48 h"
+    )
+    assert build._freshness(entry, built - timedelta(days=3), built) == (
+        "<span class='late'>✗ late: refreshed 3 days ago</span>, target 48 h"
+    )
+    # Without a target, only the age; without a time (the samples), only the target.
+    no_target = {"freshness_sla_hours": None}
+    assert build._freshness(no_target, built, built) == "refreshed under an hour ago"
+    assert build._freshness(entry, None, built) == "fresh within 48 h"
+    assert build._freshness(no_target, None, built) is None
 
 
 def test_render_escapes_text_and_keeps_tables_for_every_chart():
-    payload = build.shape(RAW, 2025)
-    entries = [
-        {
-            "name": "products.research_vs_emissions",
-            "kind": "model",
-            "domain": "shared",
-            "owner": "data office",
-            "freshness_sla_hours": None,
-            "description": "Research <next to> emissions",
-            "contract": True,
-            "tests": 1,
-            "built_from": [],
-            "upstream_products": ["research.works_by_country_year"],
-            "columns": [{"name": "year", "type": "bigint", "description": ""}],
-        }
-    ]
-    page = build.render(payload, entries)
+    built = datetime(2026, 10, 7, 8, 0, tzinfo=UTC)
+    updated = {PRODUCT["name"]: built - timedelta(hours=2)}
+    page = build.render(build.shape(RAW, 2025), [PRODUCT], built, updated)
     assert "Research &lt;next to&gt; emissions" in page
-    assert page.count("<details><summary>Table:") == 4
+    assert page.count("<details><summary>Table:") == 5
     assert "built from <code>research.works_by_country_year</code>" in page
+    assert "· 1 test</div>" in page
+    assert "refreshed 2 h ago" in page
+    assert "What the data shows" in page
     # The embedded JSON cannot close its script element early.
     data = page.split('<script id="report-data" type="application/json">', 1)[1]
     assert "</" not in data.split("</script>", 1)[0]

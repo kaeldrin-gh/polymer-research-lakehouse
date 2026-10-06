@@ -24,7 +24,13 @@ from report.products import ROOT, Products
 REPO = "https://github.com/kaeldrin-gh/polymer-research-lakehouse"
 FIRST_YEAR = 2010
 SMALL_MULTIPLES = 8
-TOP_TOPICS = 10
+# Topic shifts compare the last complete year with the year this many before.
+TOPIC_YEARS_BACK = 10
+# Topics below this share of the year's works in both years are left out.
+TOPIC_MIN_SHARE = 0.02
+# Before the pandemic and the energy crisis; compared on the same countries only,
+# because fewer countries have reported in recent releases.
+EMISSIONS_BASE_YEAR = 2019
 MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
 
@@ -45,11 +51,23 @@ def _float(value) -> float | None:
 
 def fetch(source: Products, last_year: int) -> dict:
     codes = ", ".join(f"'{c}'" for c in european_countries())
+    base_year = last_year - TOPIC_YEARS_BACK
     return {
         "works": source.query(
             "SELECT sum(CASE WHEN NOT is_xpac THEN 1 ELSE 0 END) AS works, "
             f"sum(CASE WHEN NOT is_xpac AND publication_year = {last_year} THEN 1 ELSE 0 END) "
-            "AS works_last_year FROM research.works"
+            "AS works_last_year, "
+            f"sum(CASE WHEN NOT is_xpac AND publication_year = {base_year} THEN 1 ELSE 0 END) "
+            "AS works_base_year FROM research.works"
+        ),
+        "open_access": source.query(
+            "SELECT publication_year, "
+            f"sum(CASE WHEN country_code IN ({codes}) THEN works ELSE 0 END) AS europe_works, "
+            f"sum(CASE WHEN country_code IN ({codes}) THEN open_access_works ELSE 0 END) "
+            "AS europe_open_access, sum(works) AS all_works, "
+            "sum(open_access_works) AS all_open_access FROM research.works_by_country_year "
+            f"WHERE publication_year BETWEEN {FIRST_YEAR} AND {last_year} "
+            "GROUP BY publication_year"
         ),
         "eea": source.query(
             "SELECT max(valid_from_version) AS version, max(reporting_year) AS last_year "
@@ -65,17 +83,144 @@ def fetch(source: Products, last_year: int) -> dict:
             "WHERE year = (SELECT max(year) FROM products.research_vs_emissions)"
         ),
         "topics": source.query(
-            "SELECT topic_name, works, share_of_year FROM research.topic_trends "
-            f"WHERE publication_year = {last_year} ORDER BY works DESC LIMIT {TOP_TOPICS}"
+            "SELECT topic_name, publication_year, works, share_of_year FROM research.topic_trends "
+            f"WHERE publication_year IN ({base_year}, {last_year})"
         ),
         "emissions": source.query(
             "SELECT reporting_year AS year, sum(chemical_co2_tonnes) AS chemical_co2_tonnes, "
             "sum(polymer_co2_tonnes) AS polymer_co2_tonnes, "
-            "sum(polymer_facilities) AS polymer_facilities "
+            "sum(polymer_facilities) AS polymer_facilities, "
+            "count(DISTINCT country_code) AS countries "
             "FROM sustainability.chemical_sector_by_country_year GROUP BY reporting_year "
             "ORDER BY reporting_year"
         ),
+        "country_emissions": source.query(
+            "SELECT country_code, reporting_year, chemical_co2_tonnes "
+            "FROM sustainability.chemical_sector_by_country_year "
+            f"WHERE reporting_year IN ({EMISSIONS_BASE_YEAR}, "
+            "(SELECT max(reporting_year) FROM sustainability.chemical_sector_by_country_year))"
+        ),
     }
+
+
+def _open_access(rows: list[dict]) -> list[dict]:
+    def share(part, whole) -> float | None:
+        return _int(part) / _int(whole) if _int(whole) else None
+
+    years = [
+        {
+            "year": _int(r["publication_year"]),
+            "europe": share(r["europe_open_access"], r["europe_works"]),
+            "world": share(r["all_open_access"], r["all_works"]),
+        }
+        for r in rows
+    ]
+    return sorted(years, key=lambda y: y["year"])
+
+
+def _topic_shift(rows: list[dict], base_year: int, last_year: int) -> list[dict]:
+    """Each topic's share of the year's works then and now, biggest gain first."""
+    by_topic: dict[str, dict[int, dict]] = {}
+    for r in rows:
+        by_topic.setdefault(r["topic_name"], {})[_int(r["publication_year"])] = r
+    topics = []
+    for name, years in by_topic.items():
+        before, after = years.get(base_year, {}), years.get(last_year, {})
+        share_before = _float(before.get("share_of_year")) or 0.0
+        share = _float(after.get("share_of_year")) or 0.0
+        if max(share_before, share) < TOPIC_MIN_SHARE:
+            continue
+        topics.append(
+            {
+                "topic_name": name,
+                "works_before": _int(before.get("works")),
+                "share_before": share_before,
+                "works": _int(after.get("works")),
+                "share": share,
+                "change": share - share_before,
+            }
+        )
+    return sorted(topics, key=lambda t: (-t["change"], t["topic_name"]))
+
+
+def _like_for_like(rows: list[dict]) -> dict | None:
+    """Chemical industry CO2 in the base year and the latest year, summed over
+    the countries that reported a value in both."""
+    by_year: dict[int, dict[str, float]] = {}
+    for r in rows:
+        tonnes = _float(r["chemical_co2_tonnes"])
+        if tonnes:
+            by_year.setdefault(_int(r["reporting_year"]), {})[r["country_code"]] = tonnes
+    latest = max(by_year, default=None)
+    if EMISSIONS_BASE_YEAR not in by_year or latest == EMISSIONS_BASE_YEAR:
+        return None
+    common = by_year[EMISSIONS_BASE_YEAR].keys() & by_year[latest].keys()
+    before = sum(by_year[EMISSIONS_BASE_YEAR][c] for c in common)
+    after = sum(by_year[latest][c] for c in common)
+    if not before:
+        return None
+    return {
+        "base_year": EMISSIONS_BASE_YEAR,
+        "year": latest,
+        "countries": len(common),
+        "before": before,
+        "after": after,
+        "change": after / before - 1,
+    }
+
+
+def findings(payload: dict) -> list[dict]:
+    """The page's headline takeaways, computed from the same numbers as the
+    charts, so they stay true as the data refreshes. A finding whose inputs
+    are missing (as in the CI samples) is left out."""
+    o, last_year = payload["overview"], payload["last_year"]
+    base_year = last_year - TOPIC_YEARS_BACK
+    found = []
+    if o["works_base_year"] and o["works_last_year"]:
+        change = o["works_last_year"] / o["works_base_year"] - 1
+        found.append(
+            {
+                "value": f"{'↑' if change >= 0 else '↓'} {abs(change):.0%}",
+                "text": f"{'more' if change >= 0 else 'fewer'} polymer and plastics works "
+                f"published in {last_year} than in {base_year}: {o['works_last_year']:,} "
+                f"against {o['works_base_year']:,}.",
+            }
+        )
+    oa = {y["year"]: y for y in payload["open_access"]}
+    first, last = oa.get(payload["first_year"], {}), oa.get(last_year, {})
+    if first.get("europe") is not None and last.get("europe") is not None:
+        direction = "up" if last["europe"] >= first["europe"] else "down"
+        world = f"; {_pct(last['world'])} worldwide" if last.get("world") is not None else ""
+        found.append(
+            {
+                "value": _pct(last["europe"]),
+                "text": f"of the polymer works from European countries in {last_year} are open "
+                f"access, {direction} from {_pct(first['europe'])} in "
+                f"{payload['first_year']}{world}.",
+            }
+        )
+    rising = [t for t in payload["topic_shift"] if t["change"] > 0]
+    if rising:
+        t = rising[0]
+        found.append(
+            {
+                "value": f"+{t['change'] * 100:.1f} pp",
+                "text": f"{t['topic_name']}: the fastest-growing topic, from "
+                f"{_pct(t['share_before'])} to {_pct(t['share'])} of the year's works since "
+                f"{base_year}.",
+            }
+        )
+    e = payload["like_for_like"]
+    if e:
+        found.append(
+            {
+                "value": f"{'↓' if e['change'] < 0 else '↑'} {abs(e['change']):.0%}",
+                "text": f"{'less' if e['change'] < 0 else 'more'} CO2 released to air by the "
+                f"chemical industry in {e['year']} than in {e['base_year']}, in the "
+                f"{e['countries']} countries that reported both years.",
+            }
+        )
+    return found
 
 
 def shape(raw: dict, last_year: int) -> dict:
@@ -115,29 +260,27 @@ def shape(raw: dict, last_year: int) -> dict:
         "overview": {
             "works": _int(works["works"]),
             "works_last_year": _int(works["works_last_year"]),
+            "works_base_year": _int(works["works_base_year"]),
             "eea_version": _int(eea["version"]),
             "eea_last_year": _int(eea["last_year"]),
         },
         "countries": countries[:SMALL_MULTIPLES],
+        "open_access": _open_access(raw["open_access"]),
         "scatter_year": _int(raw["scatter"][0]["year"]) if raw["scatter"] else None,
         "scatter": scatter,
-        "topics": [
-            {
-                "topic_name": r["topic_name"],
-                "works": _int(r["works"]),
-                "share_of_year": _float(r["share_of_year"]),
-            }
-            for r in raw["topics"]
-        ],
+        "topic_base_year": last_year - TOPIC_YEARS_BACK,
+        "topic_shift": _topic_shift(raw["topics"], last_year - TOPIC_YEARS_BACK, last_year),
         "emissions": [
             {
                 "year": _int(r["year"]),
                 "chemical_co2_tonnes": _float(r["chemical_co2_tonnes"]) or 0.0,
                 "polymer_co2_tonnes": _float(r["polymer_co2_tonnes"]) or 0.0,
                 "polymer_facilities": _int(r["polymer_facilities"]),
+                "countries": _int(r["countries"]),
             }
             for r in raw["emissions"]
         ],
+        "like_for_like": _like_for_like(raw["country_emissions"]),
     }
 
 
@@ -162,17 +305,40 @@ def _pct(value: float | None) -> str:
     return "–" if value is None else f"{value * 100:.0f}%"
 
 
-def _catalog_html(entries: list[dict]) -> str:
+def _age(hours: float) -> str:
+    if hours < 1:
+        return "under an hour"
+    if hours < 48:
+        return f"{hours:.0f} h"
+    return f"{hours / 24:.0f} days"
+
+
+def _freshness(entry: dict, updated: datetime | None, built_at: datetime) -> str | None:
+    """Last refresh against the product's freshness target, as text and icon."""
+    sla = entry["freshness_sla_hours"]
+    if updated is None:
+        return f"fresh within {sla} h" if sla else None
+    hours = (built_at - updated).total_seconds() / 3600
+    refreshed = f"refreshed {_age(hours)} ago"
+    if not sla:
+        return refreshed
+    if hours <= sla:
+        return f"<span class='ok'>✓ {refreshed}</span>, target {sla} h"
+    return f"<span class='late'>✗ late: {refreshed}</span>, target {sla} h"
+
+
+def _catalog_html(entries: list[dict], updated: dict[str, datetime], built_at: datetime) -> str:
     cards = []
     for e in entries:
         facts = [
             f"<span class='pill'>{html.escape(e['domain'] or '')}</span>",
             f"owner: {html.escape(e['owner'] or '–')}",
         ]
-        if e["freshness_sla_hours"]:
-            facts.append(f"fresh within {e['freshness_sla_hours']} h")
+        freshness = _freshness(e, updated.get(e["name"]), built_at)
+        if freshness:
+            facts.append(freshness)
         facts.append("contract enforced" if e["contract"] else "loaded by the pipeline")
-        facts.append(f"{e['tests']} tests")
+        facts.append(f"{e['tests']} test{'' if e['tests'] == 1 else 's'}")
         lineage = (
             "built from "
             + ", ".join(f"<code>{html.escape(u)}</code>" for u in e["upstream_products"])
@@ -193,9 +359,26 @@ def _catalog_html(entries: list[dict]) -> str:
     return "".join(cards)
 
 
-def render(payload: dict, catalog: list[dict], built_at: datetime | None = None) -> str:
+def render(
+    payload: dict,
+    catalog: list[dict],
+    built_at: datetime | None = None,
+    updated: dict[str, datetime] | None = None,
+) -> str:
     built_at = built_at or datetime.now(UTC)
+    updated = updated or {}
     o, last_year = payload["overview"], payload["last_year"]
+    base_year = payload["topic_base_year"]
+    finding_cards = "".join(
+        f"<div class='finding'><div class='num'>{html.escape(f['value'])}</div>"
+        f"<p>{html.escape(f['text'])}</p></div>"
+        for f in findings(payload)
+    )
+    findings_html = (
+        f"<h2>What the data shows</h2><div class='findings'>{finding_cards}</div>"
+        if finding_cards
+        else ""
+    )
     tiles = [
         (f"{o['works']:,}", "polymer and plastics works (OpenAlex)"),
         (f"{o['works_last_year']:,}", f"published in {last_year}"),
@@ -221,8 +404,18 @@ def render(payload: dict, catalog: list[dict], built_at: datetime | None = None)
         ]
         for r in payload["scatter"]
     ]
+    open_access_rows = [
+        [y["year"], _pct(y["europe"]), _pct(y["world"])] for y in payload["open_access"]
+    ]
     topic_rows = [
-        [t["topic_name"], f"{t['works']:,}", _pct(t["share_of_year"])] for t in payload["topics"]
+        [
+            t["topic_name"],
+            _pct(t["share_before"]),
+            _pct(t["share"]),
+            f"{t['change'] * 100:+.1f}",
+            f"{t['works']:,}",
+        ]
+        for t in payload["topic_shift"]
     ]
     emission_rows = [
         [
@@ -230,9 +423,23 @@ def render(payload: dict, catalog: list[dict], built_at: datetime | None = None)
             _mt(e["chemical_co2_tonnes"]),
             _mt(e["polymer_co2_tonnes"]),
             e["polymer_facilities"],
+            e["countries"],
         ]
         for e in payload["emissions"]
     ]
+    coverage = ""
+    if payload["emissions"]:
+        first, last = payload["emissions"][0], payload["emissions"][-1]
+        coverage = (
+            f" The number of reporting countries changes ({first['countries']} in "
+            f"{first['year']}, {last['countries']} in {last['year']}), so the totals are not "
+            "like for like"
+            + (
+                "; the finding above compares the same countries."
+                if payload["like_for_like"]
+                else "."
+            )
+        )
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -252,6 +459,7 @@ def render(payload: dict, catalog: list[dict], built_at: datetime | None = None)
   product-reader role. Built {built_at:%d %b %Y %H:%M} UTC.</p>
 </header>
 <div class="cards">{cards}</div>
+{findings_html}
 
 <h2>Polymer research in Europe's largest producers</h2>
 <p class="sub">Polymer and plastics works per year with at least one author at an
@@ -263,6 +471,21 @@ are left out, as on openalex.org.</p>
 <details><summary>Table: works per country, {recent_years[0]} to {last_year}</summary>
 {_table(["Country", *recent_years], country_rows)}</details>
 
+<h2>Open access</h2>
+<p class="sub">Share of polymer and plastics works that are free to read, per publication
+year: authors at institutions in the European countries of the EEA's industrial reporting,
+and in every country. A work with authors in several countries counts for each.</p>
+<div class="chart">
+  <div class="legend">
+    <span class="key"><span class="swatch" style="background:var(--series-1)"></span>Europe</span>
+    <span class="key"><span class="swatch" style="background:var(--text-muted)"></span>all countries</span>
+  </div>
+  <div id="chart-openaccess" class="plot" role="img"
+    aria-label="Open access share of polymer works per year, Europe and worldwide"></div>
+</div>
+<details><summary>Table: open access share per year</summary>
+{_table(["Year", "Europe", "All countries"], open_access_rows)}</details>
+
 <h2>Research next to polymer plants' emissions, {payload["scatter_year"]}</h2>
 <p class="sub">Each dot is a country: polymer works against the CO2 its polymer
 production plants (E-PRTR activity 4(a)(viii)) released to air. Both axes are
@@ -273,17 +496,24 @@ it puts two facts side by side, it does not link them.</p>
 <details><summary>Table: research and emissions per country</summary>
 {_table(["Country", "Polymer works", "Polymer plants", "Plants' CO2 (Mt)", "Chemical industry CO2 (Mt)"], scatter_rows)}</details>
 
-<h2>What polymer research is about, {last_year}</h2>
-<p class="sub">The ten OpenAlex topics with the most polymer works; the label is the
-topic's share of the year's works.</p>
-<div class="chart"><div id="chart-topics" class="plot" role="img"
-  aria-label="Topics with the most polymer works"></div></div>
-<details><summary>Table: top topics</summary>
-{_table(["Topic", "Works", "Share of the year"], topic_rows)}</details>
+<h2>How polymer research shifted, {base_year} to {last_year}</h2>
+<p class="sub">Each OpenAlex topic's share of the year's polymer works, in {base_year} and
+{last_year}, for topics with at least {TOPIC_MIN_SHARE:.0%} in either year; the biggest gain
+first. The label is the change in percentage points.</p>
+<div class="chart">
+  <div class="legend">
+    <span class="key"><span class="ring"></span>{base_year}</span>
+    <span class="key"><span class="ring filled"></span>{last_year}</span>
+  </div>
+  <div id="chart-topics" class="plot" role="img"
+    aria-label="Topic shares of polymer works, {base_year} and {last_year}"></div>
+</div>
+<details><summary>Table: topic shares</summary>
+{_table(["Topic", str(base_year), str(last_year), "Change (pp)", f"Works {last_year}"], topic_rows)}</details>
 
 <h2>Chemical industry releases of CO2 to air</h2>
 <p class="sub">All reporting countries, current EEA release. Polymer plants are part of
-the chemical industry; values withheld as confidential are not counted.</p>
+the chemical industry; values withheld as confidential are not counted.{coverage}</p>
 <div class="chart">
   <div class="legend">
     <span class="key"><span class="swatch" style="background:var(--series-1)"></span>chemical industry</span>
@@ -292,13 +522,14 @@ the chemical industry; values withheld as confidential are not counted.</p>
   <div id="chart-emissions" class="plot" role="img" aria-label="Chemical industry and polymer plants CO2 per year"></div>
 </div>
 <details><summary>Table: CO2 per year</summary>
-{_table(["Year", "Chemical industry (Mt)", "Polymer plants (Mt)", "Polymer plants"], emission_rows)}</details>
+{_table(["Year", "Chemical industry (Mt)", "Polymer plants (Mt)", "Polymer plants", "Countries"], emission_rows)}</details>
 
 <h2 id="catalog">Data product catalog</h2>
 <p class="sub">Every data product of the mesh, generated from the dbt project: who owns
-it, its freshness target, its enforced contract and tests, and the products it is built
-from. Full model documentation and lineage graph: <a href="docs/">dbt docs</a>.</p>
-<div class="products">{_catalog_html(catalog)}</div>
+it, when it was last refreshed against its freshness target, its enforced contract and
+tests, and the products it is built from. Full model documentation and lineage graph:
+<a href="docs/">dbt docs</a>.</p>
+<div class="products">{_catalog_html(catalog, updated, built_at)}</div>
 
 <h2>About</h2>
 <ul class="notes">
@@ -322,6 +553,7 @@ PAGE_STYLE = """
   --text-primary: #0b0b0b; --text-secondary: #52514e; --text-muted: #898781;
   --grid: #e1e0d9; --baseline: #c3c2b7;
   --series-1: #2a78d6; --series-2: #eb6834;
+  --good: #1f7a3d; --critical: #c62828;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -330,6 +562,7 @@ PAGE_STYLE = """
     --text-primary: #ffffff; --text-secondary: #c3c2b7; --text-muted: #898781;
     --grid: #2c2c2a; --baseline: #383835;
     --series-1: #3987e5; --series-2: #d95926;
+    --good: #4cc27a; --critical: #ff6b6b;
   }
 }
 * { box-sizing: border-box; }
@@ -366,6 +599,16 @@ th:nth-child(1), td:nth-child(1) { text-align: left; }
           color: var(--text-secondary); font-size: 0.85rem; }
 .key { display: inline-flex; align-items: center; gap: 6px; }
 .swatch { display: inline-block; width: 14px; height: 12px; border-radius: 2px; }
+.ring { display: inline-block; width: 11px; height: 11px; border-radius: 50%;
+        border: 2px solid var(--text-muted); }
+.ring.filled { background: var(--series-1); border-color: var(--series-1); }
+.findings { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 12px; margin-top: 14px; }
+.finding { background: var(--surface); border: 1px solid var(--border);
+           border-left: 3px solid var(--series-1); border-radius: 10px; padding: 12px 16px; }
+.finding p { margin: 4px 0 0; color: var(--text-secondary); font-size: 0.88rem; }
+.ok { color: var(--good); }
+.late { color: var(--critical); font-weight: 600; }
 .products { display: grid; gap: 12px; }
 .product { padding: 12px 16px; }
 .product p { margin: 6px 0; font-size: 0.9rem; }
@@ -389,11 +632,16 @@ def main(argv=None) -> None:
     last_year = as_of.year - 1  # the last complete publication year
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
-    payload = shape(fetch(Products(), last_year), last_year)
+    source = Products()
+    payload = shape(fetch(source, last_year), last_year)
     catalog = products(load_manifest(Path(args.manifest)))
-    (out / "index.html").write_text(render(payload, catalog), encoding="utf-8")
+    updated = source.updated_at([e["name"] for e in catalog])
+    built_at = datetime.now(UTC)
+    (out / "index.html").write_text(render(payload, catalog, built_at, updated), encoding="utf-8")
     (out / "report.json").write_text(
-        json.dumps({"report": payload, "catalog": catalog}, default=str, indent=1),
+        json.dumps(
+            {"report": payload, "catalog": catalog, "updated": updated}, default=str, indent=1
+        ),
         encoding="utf-8",
     )
     print(
