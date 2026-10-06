@@ -67,10 +67,36 @@ The European Environment Agency publishes
 under CC BY 4.0: facilities, pollutant releases (kg/year), waste transfers and
 energy input for about 31 European countries, 2007 to 2024.
 
-- New versions appear a few times a year (15.0 in December 2025, 16.0 in
-  February 2026). A new version can revise earlier years.
-- Downloads are a Nextcloud share (Geopackage, GDB and tabular formats). The
-  exact automated download path is still open (see Open questions).
+Tests on 6 October 2026 established:
+
+- **Access.** Every release sits in one public Nextcloud share (token
+  `sptXqwkQr5g7Bp5`), readable over WebDAV without an account:
+  `PROPFIND` on `https://sdi.eea.europa.eu/datashare/public.php/dav/files/<token>/`
+  lists the folders, and a plain `GET` downloads a file.
+- **Release discovery.** Tabular releases are folders named
+  `eea_t_ied-eprtr_p_<years>_v<NN>_r00`; the newest is the highest `vNN`
+  (v16, 20 February 2026, data 2007 to 2024). New versions appear a few times
+  a year (v14 March 2025, v15 December 2025, v16 February 2026).
+- **Only the newest version keeps its data.** Superseded tabular folders hold
+  metadata only (v13 still has a 1.8 GB Access database, nothing usable
+  without extra tooling). So no past versions can be backfilled: the release
+  history starts with the first load, and each later version adds to it.
+- **Files.** `User friendly .csv files.zip` (148 MB, about 6 seconds to
+  download) holds 16 CSV files (UTF-8 with BOM, CRLF, comma-separated, decimal
+  point). The sustainability domain needs one:
+  `F1_4_Air_Releases_Facilities.csv` (73 MB, 372,206 rows): releases to air
+  per facility, pollutant and reporting year, in kg/year, for 32 countries,
+  named in English (no ISO codes).
+- **Key.** Facility (`FacilityInspireId`), reporting year and pollutant. It is
+  unique except for 17 rows with pollutant `CONFIDENTIAL` and no value; 78
+  rows have a null release with a confidentiality reason; 4,985 rows have no
+  sector.
+- **The polymer link.** E-PRTR Annex I activity `4(a)(viii)` (sector 4,
+  chemical industry) is the production of plastic materials: polymers and
+  synthetic fibres. 59 such facilities reported air releases for 2024.
+- **Personal data.** Facility names in some sectors are people's names (for
+  example family-run livestock farms), and coordinates and cities locate them.
+  The load keeps the facility ID and drops names, cities and coordinates.
 
 ## Design
 
@@ -128,10 +154,14 @@ Components:
 - **Daily feed (Lambda + EventBridge Scheduler)**: polymer works published in
   the last 30 days, from the API, as JSON lines in S3 landing; the same MERGE
   applies them. This gives freshness between quarterly releases.
-- **Sustainability load (Glue Spark job)**: runs when a new EEA version
-  appears; converts the release to Iceberg and keeps every reported value with
-  `valid_from` and `valid_to` per EEA version (SCD Type 2), so revisions are
-  visible.
+- **Sustainability load (Lambda + Glue Spark job)**: a Lambda lists the EEA
+  share, and if a newer `vNN` exists, downloads the zip and lands the air
+  releases CSV in S3 (without names, cities or coordinates). A Glue PySpark
+  job then MERGEs it into the Iceberg table `sustainability.air_releases`,
+  keeping every reported value with the version range it was valid in
+  (`valid_from_version`, `valid_to_version`; SCD Type 2), so a value a later
+  version revises stays visible. Countries map to ISO codes through a dbt
+  seed.
 - **Transformations (dbt on ECS Fargate)**: a Docker image with dbt-athena,
   built in CI and stored in ECR. Step Functions runs it as a Fargate task after
   each load. The same dbt project runs on DuckDB with sample data in CI.
@@ -240,12 +270,10 @@ M0 needs no account, so the six-month clock starts only at M1.
 
 ## Open questions
 
-1. **EEA download path.** Confirm a stable, scriptable URL for the tabular
-   release (Nextcloud public share or EEA Discodata SQL). Fallback: the
-   sustainability domain starts from one manually downloaded version committed
-   as a pinned input, with automated updates later.
-2. **Athena on Lake Formation-governed Iceberg tables.** Lake Formation adds
+The EEA download path was answered on 6 October 2026 (see Source 2).
+
+1. **Athena on Lake Formation-governed Iceberg tables.** Lake Formation adds
    permission checks to every Athena and Glue call; test early in M2 so the
    grants model is right before the domains grow.
-3. **Name.** `polymer-research-lakehouse` is a working name; alternatives:
+2. **Name.** `polymer-research-lakehouse` is a working name; alternatives:
    `polymer-rnd-data-mesh`, `materials-data-mesh-aws`.
