@@ -282,8 +282,22 @@ class GovernanceStack(PipelineStack):
             "ProductReaderRole",
             role_name=READER_ROLE_NAME,
             description="Reads the data products through Lake Formation, nothing else.",
-            # Anyone in this account allowed to assume roles, e.g. an analyst.
-            assumed_by=iam.AccountPrincipal(self.account),
+            # Anyone in this account allowed to assume roles (an analyst), and
+            # the report workflow on this repository's main branch, keyless.
+            assumed_by=iam.CompositePrincipal(
+                iam.AccountPrincipal(self.account),
+                iam.WebIdentityPrincipal(
+                    f"arn:aws:iam::{self.account}:oidc-provider/token.actions.githubusercontent.com",
+                    conditions={
+                        "StringEquals": {
+                            "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
+                            "token.actions.githubusercontent.com:sub": (
+                                config.github_oidc_subject()
+                            ),
+                        }
+                    },
+                ),
+            ),
             max_session_duration=cdk.Duration.hours(1),
         )
         tables = self._glue_arn("table/*")

@@ -43,6 +43,11 @@ target-version = "py312"
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
 
+[tool.ruff.lint.per-file-ignores]
+# HTML template and in-page JavaScript: long lines are markup, not code.
+"report/build.py" = ["E501"]
+"report/charts.py" = ["E501"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra"

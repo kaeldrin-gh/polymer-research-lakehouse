@@ -67,6 +67,13 @@ GitHub Actions (OIDC) · uv · ruff
   3,000 OpenAlex works, CC0; 27,695 chemical industry rows of EEA release 16,
   CC BY 4.0) and on Athena against the full data, each domain's product
   tables in that domain's bucket.
+- Report and data product catalog (`report/`): one static page with charts of
+  the products (polymer research per country, research next to polymer
+  plants' emissions, research topics, chemical industry CO2) and a catalog of
+  every data product generated from the dbt manifest (owner, domain, freshness
+  target, contract, tests, upstream products), plus the dbt docs. The `report`
+  workflow builds it daily from Athena as the governed product-reader role,
+  keyless, and publishes it to GitHub Pages once the repository is public.
 - Tests: Python unit tests, CDK assertion tests, and the cdk-nag AWS Solutions
   rules, which fail the synth on any finding without a written reason.
 
@@ -82,6 +89,8 @@ npx cdk synth --quiet            # CloudFormation templates in cdk.out/
 
 uv run python scripts/load_sample.py                      # sample into DuckDB
 uv run dbt build --project-dir dbt --profiles-dir dbt     # models and tests
+uv run dbt docs generate --project-dir dbt --profiles-dir dbt
+uv run python -m report.build --out site                  # site/index.html
 ```
 
 Account setup and deploys: [docs/operations.md](docs/operations.md).

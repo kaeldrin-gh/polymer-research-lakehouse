@@ -1,0 +1,89 @@
+name: report
+
+# Builds the public page: the report from the data products on Athena, read
+# as the Lake Formation-governed product-reader role, and the data product
+# catalog and dbt docs from the dbt project. Publishes it to GitHub Pages once
+# the repository is public (Pages needs a paid plan for private repositories).
+
+on:
+  schedule:
+    # After the daily dbt build (06:00 UTC) once its schedule is enabled.
+    - cron: "30 7 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          enable-cache: true
+
+      - name: Install
+        run: uv sync --locked --group athena
+
+      # The catalog and the dbt docs describe models, not data, so they come
+      # from the committed samples; no AWS access needed.
+      - name: dbt docs (catalog source)
+        run: |
+          uv run python scripts/load_sample.py
+          uv run dbt docs generate --project-dir dbt --profiles-dir dbt
+
+      - name: Check for the reader role
+        id: reader
+        env:
+          ROLE_ARN: ${{ secrets.AWS_READER_ROLE_ARN }}
+        run: |
+          if [ -n "$ROLE_ARN" ]; then
+            echo "configured=yes" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=no" >> "$GITHUB_OUTPUT"
+            echo "::notice::AWS_READER_ROLE_ARN is not set - building the report from the samples."
+          fi
+
+      # Keyless, and as the governed reader: the page can only show what Lake
+      # Formation lets that role read.
+      - uses: aws-actions/configure-aws-credentials@v6
+        if: steps.reader.outputs.configured == 'yes'
+        with:
+          role-to-assume: ${{ secrets.AWS_READER_ROLE_ARN }}
+          aws-region: us-east-1
+          mask-aws-account-id: true
+
+      - name: Build the page
+        env:
+          WAREHOUSE: ${{ steps.reader.outputs.configured == 'yes' && 'athena' || 'duckdb' }}
+        run: |
+          uv run python -m report.build --out site --manifest dbt/target/manifest.json
+          mkdir -p site/docs
+          cp dbt/target/index.html dbt/target/manifest.json dbt/target/catalog.json site/docs/
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    if: ${{ !github.event.repository.private }}
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

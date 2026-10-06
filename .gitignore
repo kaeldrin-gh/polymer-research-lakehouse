@@ -19,3 +19,4 @@ logs/
 *.duckdb
 *.duckdb.wal
 cdk-outputs.json
+site/

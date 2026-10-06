@@ -44,6 +44,11 @@ jobs:
           uv run python scripts/load_sample.py
           uv run dbt build --project-dir dbt --profiles-dir dbt
 
+      - name: Report and catalog build from the samples
+        run: |
+          uv run dbt docs generate --project-dir dbt --profiles-dir dbt
+          uv run python -m report.build --out site --manifest dbt/target/manifest.json
+
       - name: cdk synth (cdk-nag security checks fail it on any finding)
         env:
           CDK_DISABLE_CLI_TELEMETRY: "true"

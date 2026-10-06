@@ -149,3 +149,16 @@ def test_only_table_writing_pipeline_roles_get_data_location_access(template):
     # research: snapshot load, daily feed, dbt; sustainability: Glue job,
     # dbt; products: dbt.
     assert per_bucket == {"research": 3, "sustainability": 2, "products": 1}
+
+
+def test_the_report_workflow_can_assume_the_reader_role_keylessly(template):
+    roles = template.find_resources(
+        "AWS::IAM::Role", {"Properties": {"RoleName": READER_ROLE_NAME}}
+    )
+    (role,) = roles.values()
+    statements = role["Properties"]["AssumeRolePolicyDocument"]["Statement"]
+    web = [s for s in statements if s["Action"] == "sts:AssumeRoleWithWebIdentity"]
+    (oidc,) = web
+    assert oidc["Condition"]["StringEquals"]["token.actions.githubusercontent.com:sub"] == (
+        config.github_oidc_subject()
+    )
