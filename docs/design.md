@@ -275,6 +275,17 @@ M0 needs no account, so the six-month clock starts only at M1.
 
   8.0% of the bytes, times the 707 GB snapshot, puts the first backfill at
   about 57 GB, or 0.28 USD.
+- **The daily feed works end to end on AWS (6 October 2026).** The first run
+  landed 1,666 works in 8 seconds and merged them into the Iceberg table
+  `research.works`: 1,666 rows, 1,666 IDs, `timestamp(6)` columns, one Iceberg
+  snapshot. Dropping the staging table removed all its S3 objects. A second
+  run on the same day changed no row and wrote no new snapshot: the MERGE is
+  idempotent.
+- **Step Functions waits about 60 seconds per Athena step.** The queries take
+  1 to 2 seconds; the rest is how often the `.sync` integration checks a
+  query. Five steps make a 5-minute run. That is fine for a daily batch, so it
+  stays; running the statements from a Lambda would be faster but would hide
+  each step from the execution history.
 
 - **Future publication dates.** A live run of the daily feed on 5 October 2026
   returned 1,670 works published since 5 September; 8 were dated in the
