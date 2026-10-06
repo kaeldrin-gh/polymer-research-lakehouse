@@ -296,6 +296,12 @@ M0 needs no account, so the six-month clock starts only at M1.
   current year. Each product's files landed in its domain's bucket. Sample
   row, Germany 2024: 622 polymer works, 12 polymer plants releasing 2.92 Mt
   of CO2, 18.9 Mt from the whole chemical industry.
+- **dbt as a Fargate task (6 October 2026).** CI built the image, pushed it
+  to ECR and deployed the stack in under a minute. The first run through the
+  state machine succeeded with the written-out permissions: 2 minutes 18
+  seconds in all, about 30 seconds of it starting the task and pulling the
+  image, and the same result as the laptop run (49 passed, 1 warning). At
+  0.5 vCPU and 1 GB for about two minutes, a run costs about 0.002 USD.
 - **Step Functions waits about 60 seconds per Athena step.** The queries take
   1 to 2 seconds; the rest is how often the `.sync` integration checks a
   query. Five steps make a 5-minute run. That is fine for a daily batch, so it
