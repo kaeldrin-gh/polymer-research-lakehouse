@@ -281,6 +281,14 @@ M0 needs no account, so the six-month clock starts only at M1.
   snapshot. Dropping the staging table removed all its S3 objects. A second
   run on the same day changed no row and wrote no new snapshot: the MERGE is
   idempotent.
+- **The EEA load works end to end on AWS (6 October 2026).** The Lambda found
+  release v16, downloaded it and landed 372,178 rows in 46 seconds (512 MB,
+  ARM). The Glue job (Glue 5, Flex, 2 workers) applied them in 150 seconds
+  of run time, 2 minutes 47 seconds including the Flex start: 210
+  DPU-seconds, about 0.02 USD. The planned SQL (2.2 KB) passed as a job
+  argument. Athena reads the Iceberg table Glue wrote through the shared
+  catalog: 372,178 current rows, version 16, no duplicate keys. A second run
+  saw v16 already loaded and finished in 2 seconds without starting Glue.
 - **Step Functions waits about 60 seconds per Athena step.** The queries take
   1 to 2 seconds; the rest is how often the `.sync` integration checks a
   query. Five steps make a 5-minute run. That is fine for a daily batch, so it
