@@ -100,6 +100,10 @@ def fetch(source: Products, last_year: int) -> dict:
             f"WHERE reporting_year IN ({EMISSIONS_BASE_YEAR}, "
             "(SELECT max(reporting_year) FROM sustainability.chemical_sector_by_country_year))"
         ),
+        "coverage": source.query(
+            "SELECT country_code, reporting_year, facilities, status "
+            "FROM sustainability.reporting_coverage"
+        ),
     }
 
 
@@ -141,6 +145,46 @@ def _topic_shift(rows: list[dict], base_year: int, last_year: int) -> list[dict]
             }
         )
     return sorted(topics, key=lambda t: (-t["change"], t["topic_name"]))
+
+
+def _coverage(rows: list[dict]) -> list[dict]:
+    """The country-by-year grid, countries in name order."""
+    names = european_countries()
+    cells = [
+        {
+            "code": r["country_code"],
+            "name": names.get(r["country_code"], r["country_code"]),
+            "year": _int(r["reporting_year"]),
+            "facilities": _int(r["facilities"]),
+            "status": r["status"],
+        }
+        for r in rows
+    ]
+    return sorted(cells, key=lambda c: (c["name"], c["year"]))
+
+
+def _spans(years: list[int]) -> str:
+    """2018, 2019, 2020, 2023 -> "2018-2020, 2023"."""
+    spans: list[list[int]] = []
+    for year in sorted(years):
+        if spans and year == spans[-1][1] + 1:
+            spans[-1][1] = year
+        else:
+            spans.append([year, year])
+    return ", ".join(f"{a}" if a == b else f"{a}–{b}" for a, b in spans)
+
+
+def coverage_gaps(cells: list[dict]) -> list[dict]:
+    """Per country with a gap: its missing years and the years after it left."""
+    by_country: dict[str, dict] = {}
+    for c in cells:
+        if c["status"] in ("missing", "left"):
+            entry = by_country.setdefault(c["name"], {"missing": [], "left": []})
+            entry[c["status"]].append(c["year"])
+    return [
+        {"name": name, "missing": _spans(g["missing"]), "left": _spans(g["left"])}
+        for name, g in sorted(by_country.items())
+    ]
 
 
 def _like_for_like(rows: list[dict]) -> dict | None:
@@ -281,6 +325,7 @@ def shape(raw: dict, last_year: int) -> dict:
             for r in raw["emissions"]
         ],
         "like_for_like": _like_for_like(raw["country_emissions"]),
+        "coverage": _coverage(raw["coverage"]),
     }
 
 
@@ -427,6 +472,10 @@ def render(
         ]
         for e in payload["emissions"]
     ]
+    gap_rows = [
+        [g["name"], g["missing"] or "–", g["left"] or "–"]
+        for g in coverage_gaps(payload["coverage"])
+    ]
     coverage = ""
     if payload["emissions"]:
         first, last = payload["emissions"][0], payload["emissions"][-1]
@@ -528,6 +577,24 @@ the chemical industry; values withheld as confidential are not counted.{coverage
 <details><summary>Table: CO2 per year</summary>
 {_table(["Year", "Chemical industry (Mt)", "Polymer plants (Mt)", "Polymer plants", "Countries"], emission_rows)}</details>
 
+<h2>Reporting coverage</h2>
+<p class="sub">Which countries are in which years of the current EEA release, across all
+sectors. A year without any facility is flagged, never filled in, and the like-for-like
+finding at the top compares only countries present in both years. A dbt test lists every
+gap on each build; a later EEA release that adds a missing year turns its cell blue.</p>
+<div class="chart">
+  <div class="legend">
+    <span class="key"><span class="swatch" style="background:var(--series-1)"></span>reported</span>
+    <span class="key"><span class="swatch" style="background:var(--warning)"></span>missing from this release</span>
+    <span class="key"><span class="swatch" style="background:var(--text-muted)"></span>stopped reporting (known reason)</span>
+    <span class="key"><span class="swatch hollow"></span>not yet reporting</span>
+  </div>
+  <div id="chart-coverage" class="plot" role="img"
+    aria-label="Reporting coverage per country and year"></div>
+</div>
+<details><summary>Table: gaps in reporting</summary>
+{_table(["Country", "Missing from this release", "Left"], gap_rows)}</details>
+
 <h2 id="catalog">Data product catalog</h2>
 <p class="sub">Every data product of the mesh, generated from the dbt project: who owns
 it, when it was last refreshed against its freshness target, its enforced contract and
@@ -557,7 +624,7 @@ PAGE_STYLE = """
   --text-primary: #0b0b0b; --text-secondary: #52514e; --text-muted: #898781;
   --grid: #e1e0d9; --baseline: #c3c2b7;
   --series-1: #2a78d6; --series-2: #eb6834;
-  --good: #1f7a3d; --critical: #c62828;
+  --good: #1f7a3d; --critical: #c62828; --warning: #e0a100;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -566,7 +633,7 @@ PAGE_STYLE = """
     --text-primary: #ffffff; --text-secondary: #c3c2b7; --text-muted: #898781;
     --grid: #2c2c2a; --baseline: #383835;
     --series-1: #3987e5; --series-2: #d95926;
-    --good: #4cc27a; --critical: #ff6b6b;
+    --good: #4cc27a; --critical: #ff6b6b; --warning: #f2b600;
   }
 }
 * { box-sizing: border-box; }
@@ -606,6 +673,7 @@ th:nth-child(1), td:nth-child(1) { text-align: left; }
 .ring { display: inline-block; width: 11px; height: 11px; border-radius: 50%;
         border: 2px solid var(--text-muted); }
 .ring.filled { background: var(--series-1); border-color: var(--series-1); }
+.swatch.hollow { border: 1px solid var(--baseline); }
 .findings { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
             gap: 12px; margin-top: 14px; }
 .finding { background: var(--surface); border: 1px solid var(--border);

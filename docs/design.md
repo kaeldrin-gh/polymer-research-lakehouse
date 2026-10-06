@@ -108,7 +108,7 @@ Tests on 6 October 2026 established:
 | Domain | Owns | Data products |
 | --- | --- | --- |
 | research | OpenAlex polymer works | `research.works` (one row per work, current), `research.works_by_country_year`, `research.topic_trends` |
-| sustainability | EEA industrial reporting | `sustainability.air_releases` (SCD Type 2 across EEA versions), `sustainability.chemical_sector_by_country_year` (polymer production plants separately), `sustainability.air_release_revisions` |
+| sustainability | EEA industrial reporting | `sustainability.air_releases` (SCD Type 2 across EEA versions), `sustainability.chemical_sector_by_country_year` (polymer production plants separately), `sustainability.air_release_revisions`, `sustainability.reporting_coverage` (which countries are in which years) |
 | shared | joins products, owns nothing raw | `products.research_vs_emissions` (per country and year: polymer research output, its SDG-tagged share, polymer plants' and chemical industry's CO2) |
 
 Each data product is described in its dbt model's YAML: owner, domain,
@@ -370,6 +370,17 @@ M0 needs no account, so the six-month clock starts only at M1.
   compares only countries with a value in both years, and its emissions chart
   says the totals are not like for like. A later EEA release that adds the
   missing years would arrive as new rows in the SCD Type 2 history.
+
+  Gaps are flagged, never filled: carrying a country's last value forward
+  would invent emissions. The data product `sustainability.reporting_coverage`
+  has one row per country and year with a status (`reported`, `missing`,
+  `left`, `not yet reporting`); `left` comes from the seed
+  `eea_reporting_exits`, which holds only exits with a known reason (the
+  United Kingdom). A dbt test with warning severity lists every `missing`
+  cell on each build, and the report draws the grid. In release 16 the gaps
+  are Cyprus (2024); Czechia, Iceland, Lithuania, Malta, Slovakia and
+  Switzerland (2023 and 2024); and Norway (2018 to 2024). Norway's gap has
+  no documented reason in the release, so it stays `missing`.
 - **A scoped CloudFormation execution policy (6 October 2026).** The CDK
   bootstrap's default gives CloudFormation administrator access; it now runs
   with `infra/bootstrap/cfn-execution-policy.json`. To test it, a new stack

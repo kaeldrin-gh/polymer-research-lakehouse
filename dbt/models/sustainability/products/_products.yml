@@ -71,6 +71,41 @@ models:
               arguments:
                 values: ["revised", "withdrawn"]
 
+  - name: reporting_coverage
+    description: >
+      Which countries are in which reporting years of the current EEA release, across all
+      sectors: one row per country and year, with the number of facilities that reported.
+      A year without any facility is flagged by its status, never filled in: "missing"
+      inside a country's reporting period (usually a year not yet in this release),
+      "left" after a country stopped reporting (see the eea_reporting_exits seed), "not
+      yet reporting" before its first year.
+    meta:
+      domain: sustainability
+      owner: sustainability domain team
+      data_product: true
+      freshness_sla_hours: 192
+    data_tests:
+      - unique:
+          arguments:
+            column_name: "country_code || '|' || cast(reporting_year as varchar)"
+    columns:
+      - name: country_code
+        data_type: string
+        constraints: [{type: not_null}]
+        data_tests: [not_null]
+      - name: reporting_year
+        data_type: bigint
+        constraints: [{type: not_null}]
+      - name: facilities
+        data_type: bigint
+        description: Facilities with at least one release to air that year; 0 for a gap.
+      - name: status
+        data_type: string
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["reported", "missing", "left", "not yet reporting"]
+
 unit_tests:
   - name: revisions_pair_old_and_new_values
     model: air_release_revisions
@@ -85,3 +120,36 @@ unit_tests:
       rows:
         - {facility_id: F1, reporting_year: 2024, pollutant: CO2, from_version: 16, revised_in_version: 17, previous_releases_kg: 1200.0, revised_releases_kg: 1250.0, change_type: revised}
         - {facility_id: F2, reporting_year: 2024, pollutant: NOX, from_version: 16, revised_in_version: 17, previous_releases_kg: 50.0, revised_releases_kg: null, change_type: withdrawn}
+
+  - name: coverage_flags_gaps_without_filling_them
+    model: reporting_coverage
+    given:
+      - input: ref('stg_sustainability__air_releases')
+        rows:
+          # DE reports every year; CZ misses the last; GB left; RS starts late.
+          - {facility_id: D1, reporting_year: 2019, country_code: DE}
+          - {facility_id: D1, reporting_year: 2020, country_code: DE}
+          - {facility_id: D2, reporting_year: 2020, country_code: DE}
+          - {facility_id: D1, reporting_year: 2021, country_code: DE}
+          - {facility_id: C1, reporting_year: 2019, country_code: CZ}
+          - {facility_id: C1, reporting_year: 2020, country_code: CZ}
+          - {facility_id: G1, reporting_year: 2019, country_code: GB}
+          - {facility_id: S1, reporting_year: 2021, country_code: RS}
+          - {facility_id: X1, reporting_year: 2021, country_code: null}
+      - input: ref('eea_reporting_exits')
+        rows:
+          - {country_code: GB, last_reporting_year: 2019}
+    expect:
+      rows:
+        - {country_code: DE, reporting_year: 2019, facilities: 1, status: reported}
+        - {country_code: DE, reporting_year: 2020, facilities: 2, status: reported}
+        - {country_code: DE, reporting_year: 2021, facilities: 1, status: reported}
+        - {country_code: CZ, reporting_year: 2019, facilities: 1, status: reported}
+        - {country_code: CZ, reporting_year: 2020, facilities: 1, status: reported}
+        - {country_code: CZ, reporting_year: 2021, facilities: 0, status: missing}
+        - {country_code: GB, reporting_year: 2019, facilities: 1, status: reported}
+        - {country_code: GB, reporting_year: 2020, facilities: 0, status: left}
+        - {country_code: GB, reporting_year: 2021, facilities: 0, status: left}
+        - {country_code: RS, reporting_year: 2019, facilities: 0, status: not yet reporting}
+        - {country_code: RS, reporting_year: 2020, facilities: 0, status: not yet reporting}
+        - {country_code: RS, reporting_year: 2021, facilities: 1, status: reported}

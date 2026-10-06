@@ -15,3 +15,16 @@ seeds:
         data_tests: [unique, not_null]
       - name: country_code
         data_tests: [unique, not_null]
+
+  - name: eea_reporting_exits
+    description: >
+      Countries that stopped reporting to the EEA for a known reason, with their last
+      reporting year. Years after it count as "left" in reporting_coverage, not as gaps.
+    config:
+      column_types:
+        country_code: varchar
+        last_reporting_year: bigint
+        reason: varchar
+    columns:
+      - name: country_code
+        data_tests: [unique, not_null]

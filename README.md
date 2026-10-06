@@ -103,6 +103,7 @@ granted `tier=product` and nothing else:
 | Incremental, idempotent loads | Watermark per source, changed partitions only, MERGE where the newer version wins, watermark moved last; a re-run changes nothing ([findings](docs/design.md#findings-so-far)) |
 | Cost measured before spending | Athena reads 8% of the 707 GB snapshot: nested-field and partition pruning measured on one file first; the full load scanned 48 GB for 0.24 USD |
 | Change history | SCD Type 2 across EEA releases, tested in DuckDB with revised, withdrawn and confidential values ([tests](tests/test_sustainability_scd2.py)) |
+| Data quality | Enforced contracts and dbt tests on every product; warning-level checks list what needs a look (works dated in the future, countries missing from an EEA release) without failing the build; missing years are flagged in a coverage product and the report, never filled in |
 | Data mesh | Domains own their buckets, databases, loads and products; products carry owner, freshness target and an enforced contract; the shared product reads products, never raw tables |
 | Governance | Lake Formation tags `domain` and `tier`, a reader role governed by tag-based grants, verified from both sides ([governance.py](infra/stacks/governance.py)) |
 | Privacy by design | The OpenAlex table definition cannot select author names or ORCIDs; facility names, cities and coordinates are dropped before anything is stored |

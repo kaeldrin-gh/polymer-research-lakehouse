@@ -18,7 +18,7 @@ function tokens() {
   return {
     surface: v("--surface"), ink: v("--text-primary"), secondary: v("--text-secondary"),
     muted: v("--text-muted"), grid: v("--grid"), baseline: v("--baseline"),
-    s1: v("--series-1"), s2: v("--series-2"),
+    s1: v("--series-1"), s2: v("--series-2"), warning: v("--warning"),
   };
 }
 
@@ -164,11 +164,37 @@ function emissions(t, width) {
   }));
 }
 
+// One cell per country and year; a gap keeps its own colour instead of a value.
+function coverage(t, width) {
+  const rows = data.coverage;
+  const names = [...new Set(rows.map((d) => d.name))];
+  const years = [...new Set(rows.map((d) => d.year))].sort();
+  const statuses = ["reported", "missing", "left", "not yet reporting"];
+  const status = { reported: "reported", missing: "missing from this release",
+                   left: "stopped reporting", "not yet reporting": "not yet reporting" };
+  return Plot.plot(frame(t, width, 24 + names.length * 18, {
+    marginLeft: Math.min(130, width * 0.3), marginBottom: 24, marginTop: 4,
+    x: { label: null, type: "band", padding: 0.1, tickFormat: (d) => `${d}`,
+         ticks: width < 640 ? years.filter((y) => y % 4 === 0) : years },
+    y: { label: null, domain: names, tickSize: 0, padding: 0.1 },
+    color: { domain: statuses, range: [t.s1, t.warning, t.muted, "transparent"] },
+    marks: [
+      Plot.cell(rows, { x: "year", y: "name", fill: "status", rx: 2 }),
+      // "Not yet reporting" is an outline only: no data was expected.
+      Plot.cell(rows.filter((d) => d.status === "not yet reporting"),
+                { x: "year", y: "name", fill: "none", stroke: t.baseline, rx: 2 }),
+      Plot.tip(rows, Plot.pointer({ x: "year", y: "name",
+        title: (d) => `${d.name} ${d.year}\\n${status[d.status]}`
+          + (d.facilities ? `: ${fmt(d.facilities)} facilities` : "") })),
+    ],
+  }));
+}
+
 function render() {
   const t = tokens();
   const el = (id) => document.getElementById(id);
   if (el("chart-countries")) countries(t, el("chart-countries"));
-  const draw = { openaccess, scatter, topics, emissions };
+  const draw = { openaccess, scatter, topics, emissions, coverage };
   for (const [name, fn] of Object.entries(draw)) {
     const node = el(`chart-${name}`);
     if (node) node.replaceChildren(fn(t, Math.max(node.clientWidth, 300)));

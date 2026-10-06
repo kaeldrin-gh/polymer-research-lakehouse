@@ -116,6 +116,26 @@ RAW = {
         {"country_code": "NL", "reporting_year": "2019", "chemical_co2_tonnes": "5000000"},
         {"country_code": "NL", "reporting_year": "2024", "chemical_co2_tonnes": None},
     ],
+    "coverage": [
+        {
+            "country_code": "DE",
+            "reporting_year": "2023",
+            "facilities": "1168",
+            "status": "reported",
+        },
+        {"country_code": "CZ", "reporting_year": "2018", "facilities": "0", "status": "missing"},
+        {"country_code": "CZ", "reporting_year": "2023", "facilities": "0", "status": "missing"},
+        {"country_code": "CZ", "reporting_year": "2024", "facilities": "0", "status": "missing"},
+        {"country_code": "CZ", "reporting_year": "2022", "facilities": "611", "status": "reported"},
+        {"country_code": "GB", "reporting_year": "2020", "facilities": "0", "status": "left"},
+        {"country_code": "GB", "reporting_year": "2021", "facilities": "0", "status": "left"},
+        {
+            "country_code": "RS",
+            "reporting_year": "2007",
+            "facilities": "0",
+            "status": "not yet reporting",
+        },
+    ],
 }
 
 PRODUCT = {
@@ -180,6 +200,22 @@ def test_like_for_like_compares_only_countries_reported_in_both_years():
     assert round(e["change"], 2) == -0.2
 
 
+def test_coverage_is_ordered_by_country_name_and_gaps_are_spans():
+    payload = build.shape(RAW, 2025)
+    assert [(c["name"], c["year"]) for c in payload["coverage"][:3]] == [
+        ("Czechia", 2018),
+        ("Czechia", 2022),
+        ("Czechia", 2023),
+    ]
+    assert payload["coverage"][1]["facilities"] == 611
+    # Missing years read as ranges; a country that left is listed apart, and
+    # one that has not started reporting yet is no gap.
+    assert build.coverage_gaps(payload["coverage"]) == [
+        {"name": "Czechia", "missing": "2018, 2023–2024", "left": ""},
+        {"name": "United Kingdom", "missing": "", "left": "2020–2021"},
+    ]
+
+
 def test_findings_state_the_numbers_behind_them():
     found = build.findings(build.shape(RAW, 2025))
     assert [f["value"] for f in found] == ["↑ 19%", "70%", "+6.6 pp", "↓ 20%"]
@@ -196,6 +232,7 @@ def test_findings_skip_what_the_data_cannot_support():
         "open_access": [],
         "topics": [],
         "country_emissions": [],
+        "coverage": [],
     }
     payload = build.shape(raw, 2025)
     assert build.findings(payload) == []
@@ -224,7 +261,7 @@ def test_render_escapes_text_and_keeps_tables_for_every_chart():
     updated = {PRODUCT["name"]: built - timedelta(hours=2)}
     page = build.render(build.shape(RAW, 2025), [PRODUCT], built, updated)
     assert "Research &lt;next to&gt; emissions" in page
-    assert page.count("<details><summary>Table:") == 5
+    assert page.count("<details><summary>Table:") == 6
     assert "built from <code>research.works_by_country_year</code>" in page
     assert "· 1 test</div>" in page
     assert "refreshed 2 h ago" in page
