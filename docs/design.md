@@ -329,6 +329,14 @@ M0 needs no account, so the six-month clock starts only at M1.
     the table-creating roles (snapshot load, daily feed, Glue job, dbt task)
     were granted it, per bucket. After that the dbt build and the daily feed
     passed again.
+- **The public page is built as the governed reader (6 October 2026).** The
+  `report` workflow assumes the `product-reader` role through GitHub OIDC (its
+  trust allows this repository's `main` branch, by immutable subject) and
+  reads the products from Athena, so the page can only show what Lake
+  Formation lets that role see. The data product catalog on the page comes
+  from the dbt manifest. GitHub Pages is not available for private
+  repositories on a free plan, so the publish step runs once the repository is
+  public; until then the page is a workflow artifact.
 - **Step Functions waits about 60 seconds per Athena step.** The queries take
   1 to 2 seconds; the rest is how often the `.sync` integration checks a
   query. Five steps make a 5-minute run. That is fine for a daily batch, so it
