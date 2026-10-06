@@ -229,6 +229,11 @@ def test_render_escapes_text_and_keeps_tables_for_every_chart():
     assert "· 1 test</div>" in page
     assert "refreshed 2 h ago" in page
     assert "What the data shows" in page
+    # The emissions chart states its like-for-like comparison itself.
+    assert (
+        "Compared on the same 2 countries, the chemical industry's CO2 fell 20% from 2019 "
+        "to 2024." in page
+    )
     # The embedded JSON cannot close its script element early.
     data = page.split('<script id="report-data" type="application/json">', 1)[1]
     assert "</" not in data.split("</script>", 1)[0]

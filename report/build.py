@@ -29,7 +29,7 @@ TOPIC_YEARS_BACK = 10
 # Topics below this share of the year's works in both years are left out.
 TOPIC_MIN_SHARE = 0.02
 # Before the pandemic and the energy crisis; compared on the same countries only,
-# because fewer countries have reported in recent releases.
+# because a country's latest years can be missing from a release.
 EMISSIONS_BASE_YEAR = 2019
 MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
@@ -430,13 +430,17 @@ def render(
     coverage = ""
     if payload["emissions"]:
         first, last = payload["emissions"][0], payload["emissions"][-1]
+        e = payload["like_for_like"]
         coverage = (
-            f" The number of reporting countries changes ({first['countries']} in "
-            f"{first['year']}, {last['countries']} in {last['year']}), so the totals are not "
-            "like for like"
+            f" Not every country appears in every year ({first['countries']} in "
+            f"{first['year']}, {last['countries']} in {last['year']}): the United Kingdom left "
+            "the EU after 2019, and a country's latest years can be missing from a release "
+            "until it reports them, so the totals are not like for like"
             + (
-                "; the finding above compares the same countries."
-                if payload["like_for_like"]
+                f". Compared on the same {e['countries']} countries, the chemical industry's "
+                f"CO2 {'fell' if e['change'] < 0 else 'rose'} {abs(e['change']):.0%} from "
+                f"{e['base_year']} to {e['year']}."
+                if e
                 else "."
             )
         )

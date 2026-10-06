@@ -358,13 +358,18 @@ M0 needs no account, so the six-month clock starts only at M1.
   from the dbt manifest. GitHub Pages is not available for private
   repositories on a free plan, so the publish step waited until the
   repository went public (6 October 2026).
-- **Emission totals are not comparable across years.** Fewer countries
-  report chemical-industry releases in recent EEA releases: 27 in 2007, 22 in
-  2024, and 17 with a CO2 value in both 2019 and 2024. The raw totals fall
-  30% from 2019 to 2024; for those 17 countries the drop is 18%, so the rest
-  is countries that stopped appearing. The report's finding compares only
-  countries with a value in both years, and its emissions chart says the
-  totals are not like for like.
+- **Emission totals are not comparable across years.** Not every country
+  appears in every year: 27 have chemical-industry releases in 2007, 22 in
+  2024, and 17 have a CO2 value in both 2019 and 2024. Of the countries
+  missing in 2024, the United Kingdom left the EU after 2019. Czechia,
+  Slovakia, Lithuania and Switzerland have no facility at all, in any sector,
+  for 2023 and 2024 in release 16 (Czechia had 611 in 2022): their recent
+  years are not in this release, most likely not yet submitted or processed,
+  rather than plants closing. The raw totals fall 30% from 2019 to 2024; for
+  the 17 countries in both years the drop is 18%. The report's finding
+  compares only countries with a value in both years, and its emissions chart
+  says the totals are not like for like. A later EEA release that adds the
+  missing years would arrive as new rows in the SCD Type 2 history.
 - **A scoped CloudFormation execution policy (6 October 2026).** The CDK
   bootstrap's default gives CloudFormation administrator access; it now runs
   with `infra/bootstrap/cfn-execution-policy.json`. To test it, a new stack

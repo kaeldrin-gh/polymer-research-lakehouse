@@ -146,7 +146,7 @@ function emissions(t, width) {
   ]);
   const last = data.emissions[data.emissions.length - 1];
   return Plot.plot(frame(t, width, 300, {
-    marginLeft: 56, marginRight: 120,
+    marginLeft: 56, marginRight: 120, marginTop: 28,
     x: { label: null, tickFormat: (d) => `${d}` },
     y: { label: "CO2, million tonnes", grid: true, tickFormat: (d) => (d / 1e6).toFixed(0) },
     color: { domain: ["chemical industry", "polymer plants"], range: [t.s1, t.s2] },
