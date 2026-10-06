@@ -1,0 +1,33 @@
+version: 2
+
+sources:
+  - name: sustainability
+    schema: sustainability
+    description: >
+      Tables the sustainability domain's load writes (infra/stacks/sustainability_pipeline.py).
+    tables:
+      - name: air_releases
+        description: >
+          Industrial releases to air from the EEA's IED/E-PRTR reporting, per facility,
+          reporting year and pollutant, with the release versions each value was valid in
+          (SCD Type 2). No facility names, cities or coordinates.
+        meta:
+          domain: sustainability
+          owner: sustainability domain team
+          data_product: true
+          source_licence: CC BY 4.0 (European Environment Agency)
+        columns:
+          - name: facility_id
+            description: INSPIRE ID of the facility.
+            data_tests: [not_null]
+          - name: reporting_year
+            data_tests: [not_null]
+          - name: pollutant
+            data_tests: [not_null]
+          - name: releases_kg
+            description: Releases in kg per year; null when the value is confidential.
+          - name: valid_from_version
+            description: First EEA release version that reported this value.
+            data_tests: [not_null]
+          - name: valid_to_version
+            description: First release version that no longer did; null while current.

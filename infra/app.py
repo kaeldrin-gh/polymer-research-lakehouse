@@ -13,6 +13,7 @@ from infra import config
 from infra.stacks.data_lake import DataLakeStack
 from infra.stacks.github_deploy import GitHubDeployStack
 from infra.stacks.research_pipeline import ResearchPipelineStack
+from infra.stacks.sustainability_pipeline import SustainabilityPipelineStack
 
 CDK_JSON = Path(__file__).resolve().parents[1] / "cdk.json"
 
@@ -31,6 +32,8 @@ def build_app() -> cdk.App:
     data_lake = DataLakeStack(app, "DataLake", env=env, tags=tags)
     pipeline = ResearchPipelineStack(app, "ResearchPipeline", env=env, tags=tags)
     pipeline.add_dependency(data_lake)
+    sustainability = SustainabilityPipelineStack(app, "SustainabilityPipeline", env=env, tags=tags)
+    sustainability.add_dependency(data_lake)
 
     # Security rules from cdk-nag: a finding that is not acknowledged with a
     # written reason fails the synth.

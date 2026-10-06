@@ -1,7 +1,8 @@
 # Design: polymer-research-lakehouse (working name)
 
-Status: 5 October 2026. Approved. M0 is done, and the research domain's load
-code (part of M2) is written and tested without AWS. No AWS account yet.
+Status: 6 October 2026. Approved. M0 is done. The code of both domains (load
+pipelines, dbt products, shared product) is written and tested without AWS,
+so M2 to M4 are mostly deploying and verifying it. No AWS account yet.
 
 ## Objective
 
@@ -105,8 +106,8 @@ Tests on 6 October 2026 established:
 | Domain | Owns | Data products |
 | --- | --- | --- |
 | research | OpenAlex polymer works | `research.works` (one row per work, current), `research.works_by_country_year`, `research.topic_trends` |
-| sustainability | EEA industrial reporting | `sustainability.facility_releases` (SCD Type 2 across EEA versions), `sustainability.chemical_sector_by_country_year` |
-| shared | joins products, owns nothing raw | `products.research_vs_emissions` (per country and year: polymer research output, its SDG-tagged share, chemical-sector releases) |
+| sustainability | EEA industrial reporting | `sustainability.air_releases` (SCD Type 2 across EEA versions), `sustainability.chemical_sector_by_country_year` (polymer production plants separately), `sustainability.air_release_revisions` |
+| shared | joins products, owns nothing raw | `products.research_vs_emissions` (per country and year: polymer research output, its SDG-tagged share, polymer plants' and chemical industry's CO2) |
 
 Each data product is described in its dbt model's YAML: owner, domain,
 description, freshness SLA (`meta`), an enforced schema contract and its data

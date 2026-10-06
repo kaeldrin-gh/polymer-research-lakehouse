@@ -1,0 +1,39 @@
+version: 2
+
+models:
+  - name: research_vs_emissions
+    description: >
+      Per country and year: polymer and plastics research output (OpenAlex) next to the
+      releases to air of polymer production plants and the chemical industry (EEA).
+      Descriptive only: research and emissions are compared, not linked causally.
+    meta:
+      domain: shared
+      owner: data office
+      data_product: true
+      upstream_products: [research.works_by_country_year, sustainability.chemical_sector_by_country_year]
+    data_tests:
+      - unique:
+          arguments:
+            column_name: "country_code || '|' || cast(year as varchar)"
+    columns:
+      - name: country_code
+        data_type: string
+        constraints: [{type: not_null}]
+      - name: year
+        data_type: bigint
+        constraints: [{type: not_null}]
+      - name: polymer_works
+        data_type: bigint
+        description: Polymer and plastics works with an institution in the country; 0 if none.
+      - name: sdg_tagged_share
+        data_type: double
+      - name: open_access_share
+        data_type: double
+      - name: polymer_facilities
+        data_type: bigint
+      - name: polymer_co2_tonnes
+        data_type: double
+      - name: chemical_facilities
+        data_type: bigint
+      - name: chemical_co2_tonnes
+        data_type: double

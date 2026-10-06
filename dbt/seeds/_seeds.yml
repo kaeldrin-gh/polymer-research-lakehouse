@@ -1,0 +1,17 @@
+version: 2
+
+seeds:
+  - name: eea_country_codes
+    description: >
+      The EEA's English country names mapped to ISO 3166-1 alpha-2 codes, as OpenAlex
+      uses them (United Kingdom is GB, Greece is GR). Covers every country in the
+      industrial reporting release.
+    config:
+      column_types:
+        country_name: varchar
+        country_code: varchar
+    columns:
+      - name: country_name
+        data_tests: [unique, not_null]
+      - name: country_code
+        data_tests: [unique, not_null]

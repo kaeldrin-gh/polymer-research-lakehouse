@@ -6,6 +6,7 @@ profile: polymer_research
 model-paths: ["models"]
 macro-paths: ["macros"]
 test-paths: ["tests"]
+seed-paths: ["seeds"]
 clean-targets: ["target", "dbt_packages", "logs"]
 
 vars:
@@ -13,10 +14,11 @@ vars:
   # today; unit tests pin it.
   as_of_date: null
 
+# Each schema is a Glue database on Athena (see infra/stacks/data_lake.py).
+# Every domain keeps its staging views apart from its data products.
 models:
   polymer_research:
     research:
-      # Each schema is a Glue database on Athena (see infra/stacks/data_lake.py).
       staging:
         +schema: research_staging
         +materialized: view
@@ -29,3 +31,24 @@ models:
         +table_type: iceberg
         +contract:
           enforced: true
+    sustainability:
+      staging:
+        +schema: sustainability_staging
+        +materialized: view
+      products:
+        +schema: sustainability
+        +materialized: table
+        +table_type: iceberg
+        +contract:
+          enforced: true
+    # Products that join domains; they own no raw data.
+    shared:
+      +schema: products
+      +materialized: table
+      +table_type: iceberg
+      +contract:
+        enforced: true
+
+seeds:
+  polymer_research:
+    +schema: sustainability_staging

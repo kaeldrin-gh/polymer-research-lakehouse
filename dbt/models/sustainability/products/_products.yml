@@ -1,0 +1,87 @@
+version: 2
+
+models:
+  - name: chemical_sector_by_country_year
+    description: >
+      Chemical industry releases to air per country and reporting year (current EEA
+      release), with polymer production plants (E-PRTR Annex I 4(a)(viii)) separately.
+      Tonnes per year; confidential values are counted, not summed.
+    meta:
+      domain: sustainability
+      owner: sustainability domain team
+      data_product: true
+      freshness_sla_hours: 192
+    data_tests:
+      - unique:
+          arguments:
+            column_name: "country_code || '|' || cast(reporting_year as varchar)"
+    columns:
+      - name: country_code
+        data_type: string
+        constraints: [{type: not_null}]
+        data_tests: [not_null]
+      - name: reporting_year
+        data_type: bigint
+        constraints: [{type: not_null}]
+      - name: chemical_facilities
+        data_type: bigint
+        data_tests:
+          - within_range: {arguments: {min_value: 1, max_value: 100000}}
+      - name: polymer_facilities
+        data_type: bigint
+      - name: chemical_co2_tonnes
+        data_type: double
+        data_tests:
+          - within_range: {arguments: {min_value: 0, max_value: 1000000000}}
+      - name: polymer_co2_tonnes
+        data_type: double
+      - name: polymer_nmvoc_tonnes
+        data_type: double
+      - name: confidential_values
+        data_type: bigint
+
+  - name: air_release_revisions
+    description: >
+      Every value a later EEA release revised or withdrew, with the old and new value.
+      Built from the SCD Type 2 history; empty until a second release is loaded.
+    meta:
+      domain: sustainability
+      owner: sustainability domain team
+      data_product: true
+    columns:
+      - name: facility_id
+        data_type: string
+        constraints: [{type: not_null}]
+      - name: reporting_year
+        data_type: bigint
+      - name: pollutant
+        data_type: string
+      - name: from_version
+        data_type: bigint
+      - name: revised_in_version
+        data_type: bigint
+      - name: previous_releases_kg
+        data_type: double
+      - name: revised_releases_kg
+        data_type: double
+      - name: change_type
+        data_type: string
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["revised", "withdrawn"]
+
+unit_tests:
+  - name: revisions_pair_old_and_new_values
+    model: air_release_revisions
+    given:
+      - input: source('sustainability', 'air_releases')
+        rows:
+          - {facility_id: F1, reporting_year: 2024, pollutant: CO2, releases_kg: 1200.0, valid_from_version: 16, valid_to_version: 17}
+          - {facility_id: F1, reporting_year: 2024, pollutant: CO2, releases_kg: 1250.0, valid_from_version: 17, valid_to_version: null}
+          - {facility_id: F2, reporting_year: 2024, pollutant: NOX, releases_kg: 50.0, valid_from_version: 16, valid_to_version: 17}
+          - {facility_id: F3, reporting_year: 2024, pollutant: CO2, releases_kg: 9.0, valid_from_version: 16, valid_to_version: null}
+    expect:
+      rows:
+        - {facility_id: F1, reporting_year: 2024, pollutant: CO2, from_version: 16, revised_in_version: 17, previous_releases_kg: 1200.0, revised_releases_kg: 1250.0, change_type: revised}
+        - {facility_id: F2, reporting_year: 2024, pollutant: NOX, from_version: 16, revised_in_version: 17, previous_releases_kg: 50.0, revised_releases_kg: null, change_type: withdrawn}

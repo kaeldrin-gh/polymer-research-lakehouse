@@ -6,13 +6,13 @@ data. A research domain loads polymer and plastics publications from the
 industrial emissions, and a shared data product joins them. Everything is
 serverless and defined in AWS CDK.
 
-**Status:** the research domain's load logic and orchestration are written and
-tested (milestone M2 code); nothing runs on AWS yet, because the account opens
-at M1. See the [design](docs/design.md) for the plan.
+**Status:** both domains' loads, the dbt data products and the shared product
+are written and tested without AWS; nothing runs on AWS yet, because the
+account opens at M1. See the [design](docs/design.md) for the plan.
 
-**Stack:** Python · AWS CDK · S3 · Glue Data Catalog · Athena · Iceberg ·
-Lambda · Step Functions · EventBridge Scheduler · dbt · DuckDB ·
-GitHub Actions (OIDC) · uv · ruff
+**Stack:** Python · PySpark · AWS CDK · S3 · Glue (Data Catalog, Spark jobs) ·
+Athena · Iceberg · Lambda · Step Functions · EventBridge Scheduler · dbt ·
+DuckDB · GitHub Actions (OIDC) · uv · ruff
 
 ## What exists now
 
@@ -33,12 +33,26 @@ GitHub Actions (OIDC) · uv · ruff
   - The SQL is built and unit-tested in `src/research/`; every value in it is
     validated. Every IAM permission is written out; schedules stay disabled
     until the first runs are checked.
+- `SustainabilityPipeline` stack: a Lambda finds the newest EEA industrial
+  reporting release on the EEA's public WebDAV share, downloads it, and lands
+  the air releases without facility names or places (372,178 rows, about
+  10 seconds). A Glue PySpark job (Glue 5, Flex, 2 workers) applies them to
+  the Iceberg table `sustainability.air_releases` as SCD Type 2: every value
+  keeps the release versions it was valid in, so EEA revisions stay visible.
+  The SQL is built in `src/sustainability/` and tested against DuckDB.
 - `GitHubDeploy` stack: an OIDC role that only this repository's `main` branch
   can assume, and that can only assume the CDK bootstrap roles. No access keys.
-- dbt project (`dbt/`): staging and intermediate views, and the research data
-  products `works_by_country_year` and `topic_trends` with enforced contracts,
-  data tests and unit tests. It runs on DuckDB with a committed, seeded sample
-  of 3,000 real OpenAlex works (`sample/`, CC0) and will run on Athena from M3.
+- dbt project (`dbt/`): staging views per domain and the data products, all
+  with enforced contracts, data tests and unit tests:
+  - research: `works_by_country_year`, `topic_trends`;
+  - sustainability: `chemical_sector_by_country_year` (with polymer
+    production plants, E-PRTR 4(a)(viii), separately), `air_release_revisions`;
+  - shared: `research_vs_emissions`, which joins the two domains' products
+    only, never their raw tables.
+
+  It runs on DuckDB with committed samples of real data (`sample/`: 3,000
+  OpenAlex works, CC0; 27,695 chemical industry rows of EEA release 16,
+  CC BY 4.0) and will run on Athena from M3.
 - Tests: Python unit tests, CDK assertion tests, and the cdk-nag AWS Solutions
   rules, which fail the synth on any finding without a written reason.
 
@@ -61,4 +75,5 @@ Account setup and deploys: [docs/operations.md](docs/operations.md).
 ## License
 
 MIT, see [LICENSE](LICENSE). OpenAlex data is CC0. EEA industrial reporting
-data is CC BY 4.0 © European Environment Agency.
+data (including `sample/sustainability_air_releases.parquet`) is CC BY 4.0
+© European Environment Agency.

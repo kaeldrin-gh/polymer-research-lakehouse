@@ -1,0 +1,14 @@
+version: 2
+
+models:
+  - name: stg_sustainability__air_releases
+    description: Current air releases with ISO country codes and activity flags.
+    data_tests:
+      # The current release has one value per facility, year and pollutant.
+      - unique:
+          arguments:
+            column_name: "facility_id || '|' || cast(reporting_year as varchar) || '|' || pollutant"
+    columns:
+      - name: country_code
+        description: Every country in the release must map to a code.
+        data_tests: [not_null]
