@@ -321,6 +321,13 @@ M0 needs no account, so the six-month clock starts only at M1.
   changes when OpenAlex changes the work, so a re-run would not fill the new
   column. The rebuild is a dropped table, a deleted watermark and a fresh
   backfill (`docs/operations.md`, about 0.24 USD).
+
+  After the rebuild on 6 October 2026: 859,181 works, all with `is_xpac`
+  set (73,330 xpac, 785,851 not); 857,629 from the 2026-09-23 snapshot and
+  1,552 from the daily feed. The API then counted 808,025 works without xpac;
+  the difference is works OpenAlex added after the snapshot with older
+  publication dates, outside the feed's 30-day window. The next quarterly
+  snapshot (14 October 2026) brings them in, as designed.
 - **CDK's Athena task grants too much.** Without its own result location (the
   workgroup enforces one), `AthenaStartQueryExecution` grants S3 writes on
   every bucket. The state machines use the raw `.sync` integration with
