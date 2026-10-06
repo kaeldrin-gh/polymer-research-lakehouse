@@ -109,5 +109,5 @@ jobs:
         env:
           CDK_DISABLE_CLI_TELEMETRY: "true"
         run: >-
-          npx cdk deploy DataLake ResearchPipeline SustainabilityPipeline
+          npx cdk deploy DataLake ResearchPipeline SustainabilityPipeline ProductsBuild
           --require-approval never --no-notices

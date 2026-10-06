@@ -124,7 +124,7 @@ class PipelineStack(cdk.Stack):
         construct_id: str,
         definition: sfn.IChainable,
         *,
-        invoked: lambda_.Function,
+        invoked: lambda_.Function | None,
         timeout: cdk.Duration,
     ) -> sfn.StateMachine:
         log_group = logs.LogGroup(
@@ -143,13 +143,13 @@ class PipelineStack(cdk.Stack):
                 destination=log_group, level=sfn.LogLevel.ALL, include_execution_data=True
             ),
         )
-        self._acknowledge_wildcards(
-            machine.role,
-            {
-                "*": "Required by AWS: X-Ray tracing and CloudWatch Logs delivery actions "
-                "do not support resource-level permissions.",
-                f"<{self._logical(invoked)}.Arn>:*": "Invokes any version of its own "
-                "planning function.",
-            },
-        )
+        findings = {
+            "*": "Required by AWS: X-Ray tracing and CloudWatch Logs delivery actions "
+            "do not support resource-level permissions.",
+        }
+        if invoked is not None:
+            findings[f"<{self._logical(invoked)}.Arn>:*"] = (
+                "Invokes any version of its own planning function."
+            )
+        self._acknowledge_wildcards(machine.role, findings)
         return machine

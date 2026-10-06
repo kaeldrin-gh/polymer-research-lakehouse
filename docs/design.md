@@ -289,6 +289,13 @@ M0 needs no account, so the six-month clock starts only at M1.
   argument. Athena reads the Iceberg table Glue wrote through the shared
   catalog: 372,178 current rows, version 16, no duplicate keys. A second run
   saw v16 already loaded and finished in 2 seconds without starting Glue.
+- **dbt runs on Athena unchanged (6 October 2026).** The same project that
+  CI runs on DuckDB built every product on Athena on the first try, from a
+  laptop with short-lived credentials: 4 views, 5 Iceberg tables and the
+  seed, 49 data tests passing and one warning, the 23 works dated beyond the
+  current year. Each product's files landed in its domain's bucket. Sample
+  row, Germany 2024: 622 polymer works, 12 polymer plants releasing 2.92 Mt
+  of CO2, 18.9 Mt from the whole chemical industry.
 - **Step Functions waits about 60 seconds per Athena step.** The queries take
   1 to 2 seconds; the rest is how often the `.sync` integration checks a
   query. Five steps make a 5-minute run. That is fine for a daily batch, so it

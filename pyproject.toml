@@ -21,6 +21,11 @@ dev = [
     "dbt-duckdb>=1.11,<1.12",
     "duckdb>=1.5,<1.6",
 ]
+# dbt on Athena: the Fargate image (docker/dbt/) and local runs against AWS.
+athena = [
+    "dbt-core>=1.12,<1.13",
+    "dbt-athena>=1.11,<1.12",
+]
 
 [build-system]
 requires = ["hatchling>=1.27"]

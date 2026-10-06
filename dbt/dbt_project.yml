@@ -15,7 +15,9 @@ vars:
   as_of_date: null
 
 # Each schema is a Glue database on Athena (see infra/stacks/data_lake.py).
-# Every domain keeps its staging views apart from its data products.
+# Every domain keeps its staging views apart from its data products, and its
+# product tables in its own bucket (s3_data_dir; Athena only, DuckDB ignores
+# it). The bucket names follow infra/config.py:bucket_name.
 models:
   polymer_research:
     research:
@@ -29,6 +31,7 @@ models:
         +schema: research
         +materialized: table
         +table_type: iceberg
+        +s3_data_dir: "s3://prl-research-{{ env_var('AWS_ACCOUNT_ID', 'unset') }}-us-east-1/dbt/"
         +contract:
           enforced: true
     sustainability:
@@ -39,6 +42,7 @@ models:
         +schema: sustainability
         +materialized: table
         +table_type: iceberg
+        +s3_data_dir: "s3://prl-sustainability-{{ env_var('AWS_ACCOUNT_ID', 'unset') }}-us-east-1/dbt/"
         +contract:
           enforced: true
     # Products that join domains; they own no raw data.
@@ -46,9 +50,11 @@ models:
       +schema: products
       +materialized: table
       +table_type: iceberg
+      +s3_data_dir: "s3://prl-products-{{ env_var('AWS_ACCOUNT_ID', 'unset') }}-us-east-1/dbt/"
       +contract:
         enforced: true
 
 seeds:
   polymer_research:
     +schema: sustainability_staging
+    +s3_data_dir: "s3://prl-sustainability-{{ env_var('AWS_ACCOUNT_ID', 'unset') }}-us-east-1/dbt/"

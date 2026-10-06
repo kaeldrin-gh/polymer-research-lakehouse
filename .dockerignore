@@ -1,0 +1,8 @@
+# The dbt image needs the dbt project and its requirements only.
+*
+!dbt/
+!docker/dbt/
+dbt/target/
+dbt/logs/
+dbt/dbt_packages/
+dbt/.user.yml

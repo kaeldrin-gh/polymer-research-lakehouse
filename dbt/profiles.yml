@@ -1,10 +1,23 @@
 polymer_research:
   target: ci
   outputs:
-    # DuckDB with the committed sample (scripts/load_sample.py), locally and in
-    # CI. The Athena target is added when the project first runs on AWS (M3).
+    # DuckDB with the committed samples (scripts/load_sample.py), locally and in
+    # CI.
     ci:
       type: duckdb
       path: "{{ env_var('DUCKDB_PATH', 'dbt/target/lakehouse.duckdb') }}"
       schema: research
       threads: 4
+
+    # Athena: the Fargate task (docker/dbt/) and local runs against AWS. The
+    # workgroup enforces the query result location and the scan limit;
+    # s3_staging_dir is required by the adapter but the workgroup's wins.
+    athena:
+      type: athena
+      region_name: us-east-1
+      database: awsdatacatalog
+      schema: research
+      work_group: polymer-research-lakehouse
+      s3_staging_dir: "s3://prl-athena-results-{{ env_var('AWS_ACCOUNT_ID', 'unset') }}-us-east-1/results/"
+      threads: 4
+      num_retries: 2

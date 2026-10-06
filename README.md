@@ -11,8 +11,8 @@ are written and tested without AWS; nothing runs on AWS yet, because the
 account opens at M1. See the [design](docs/design.md) for the plan.
 
 **Stack:** Python · PySpark · AWS CDK · S3 · Glue (Data Catalog, Spark jobs) ·
-Athena · Iceberg · Lambda · Step Functions · EventBridge Scheduler · dbt ·
-DuckDB · GitHub Actions (OIDC) · uv · ruff
+Athena · Iceberg · Lambda · Step Functions · ECS Fargate · ECR · Docker ·
+EventBridge Scheduler · dbt (Athena, DuckDB) · GitHub Actions (OIDC) · uv · ruff
 
 ## What exists now
 
@@ -40,6 +40,11 @@ DuckDB · GitHub Actions (OIDC) · uv · ruff
   the Iceberg table `sustainability.air_releases` as SCD Type 2: every value
   keeps the release versions it was valid in, so EEA revisions stay visible.
   The SQL is built in `src/sustainability/` and tested against DuckDB.
+- `ProductsBuild` stack: dbt on Athena as an ECS Fargate task. CDK builds the
+  image (`docker/dbt/`, versions pinned from `uv.lock`) and pushes it to ECR;
+  a state machine runs the task and waits for it. The task runs in a VPC with
+  public subnets only and no NAT gateway, accepts no inbound traffic, and can
+  write only under each domain bucket's `dbt/` prefix.
 - `GitHubDeploy` stack: an OIDC role that only this repository's `main` branch
   can assume, and that can only assume the CDK bootstrap roles. No access keys.
 - dbt project (`dbt/`): staging views per domain and the data products, all
@@ -51,9 +56,10 @@ DuckDB · GitHub Actions (OIDC) · uv · ruff
   - shared: `research_vs_emissions`, which joins the two domains' products
     only, never their raw tables.
 
-  It runs on DuckDB with committed samples of real data (`sample/`: 3,000
-  OpenAlex works, CC0; 27,695 chemical industry rows of EEA release 16,
-  CC BY 4.0) and will run on Athena from M3.
+  It runs on DuckDB with committed samples of real data in CI (`sample/`:
+  3,000 OpenAlex works, CC0; 27,695 chemical industry rows of EEA release 16,
+  CC BY 4.0) and on Athena against the full data, each domain's product
+  tables in that domain's bucket.
 - Tests: Python unit tests, CDK assertion tests, and the cdk-nag AWS Solutions
   rules, which fail the synth on any finding without a written reason.
 
