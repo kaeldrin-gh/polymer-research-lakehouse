@@ -79,6 +79,23 @@ flowchart TB
   read `tier=product` tables only, with file access vended by Lake Formation;
   staging and raw tables are refused. The public page is built as that role.
 
+## Running on AWS
+
+The snapshot load as Step Functions ran it: plan, stage the changed
+partitions, MERGE, apply deletions, compact, and move the watermark last.
+
+<img src="docs/images/snapshot-load.png" alt="Step Functions graph of a successful snapshot load, every state green" width="360">
+
+The shared data product in Athena, for Germany. It reads the domains'
+products, not the raw tables, so a query scans kilobytes:
+
+![Athena results for products.research_vs_emissions, 18 rows for Germany from 2007 to 2024, 10.34 KB scanned](docs/images/athena-research-vs-emissions.png)
+
+The Lake Formation tags that govern access. The `product-reader` role is
+granted `tier=product` and nothing else:
+
+![Lake Formation LF-Tags: tier with values product, raw and staging; domain with values shared, sustainability and research](docs/images/lake-formation-tags.png)
+
 ## What it demonstrates
 
 | Capability | Where |
