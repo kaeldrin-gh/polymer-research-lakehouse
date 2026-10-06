@@ -18,6 +18,12 @@ SRC = Path(__file__).resolve().parents[2] / "src"
 LOG_RETENTION = logs.RetentionDays.TWO_WEEKS
 
 
+def nag_account(stack: cdk.Stack) -> str:
+    """How cdk-nag prints the account: the placeholder when synthesizing
+    without credentials (tests, CI), the account ID when deploying."""
+    return "<AWS::AccountId>" if cdk.Token.is_unresolved(stack.account) else stack.account
+
+
 class PipelineStack(cdk.Stack):
     @staticmethod
     def _objects(bucket: str, prefix: str = "") -> str:
@@ -33,8 +39,8 @@ class PipelineStack(cdk.Stack):
             )
 
     def _nag_arn(self, arn: str) -> str:
-        # How cdk-nag prints an ARN built from config: tokens become <...>.
-        return arn.replace(self.account, "<AWS::AccountId>")
+        """An ARN as cdk-nag prints it in a finding, so it can be acknowledged."""
+        return arn.replace(self.account, nag_account(self))
 
     def _glue_arn(self, resource: str) -> str:
         # Plain strings rather than format_arn, so the ARN reads the same with

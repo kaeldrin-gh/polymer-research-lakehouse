@@ -7,22 +7,33 @@ only when M1 starts.
 
 ### Create and secure the account
 
+Do not enable IAM Identity Center or AWS Organizations. Giving a person access
+to the account through Identity Center needs an organization, and creating an
+organization moves the account from the free plan to pay-as-you-go and ends
+the free credits at once.
+
 1. Sign up at [aws.amazon.com](https://aws.amazon.com) and choose the **Free**
    account plan.
 2. Sign in as the root user.
 3. Add MFA to the root user (IAM > Security credentials).
 4. Do not create root access keys.
-5. Open IAM Identity Center in `us-east-1` and enable it.
-6. Create a user for yourself in IAM Identity Center.
-7. Create a permission set from the `AdministratorAccess` managed policy.
-8. Assign the user and the permission set to the account.
-9. Sign out of the root user.
+5. In IAM, create a user for yourself with console access.
+6. Attach the `AdministratorAccess` managed policy to the user.
+7. Sign out, sign in as that user, and add MFA to it.
+8. Do not create access keys for the user.
 
 ### Configure the local CLI
 
-1. Install the AWS CLI v2.
-2. Run `aws configure sso` and name the profile `prl`.
-3. Run `aws sso login --profile prl`.
+The CLI gets short-lived credentials from your console sign-in
+([`aws login`](https://aws.amazon.com/blogs/security/simplified-developer-access-to-aws-with-aws-login),
+AWS CLI 2.32 or later); no access keys exist anywhere.
+
+1. Install or update the AWS CLI v2 to 2.32 or later.
+2. Run `aws login --profile prl --region us-east-1`.
+3. Sign in as your IAM user in the browser window that opens.
+4. Check the session with `aws sts get-caller-identity --profile prl`.
+
+The session refreshes for up to 12 hours; run `aws login` again after that.
 
 ### Bootstrap CDK and the deploy role
 
@@ -42,7 +53,8 @@ only when M1 starts.
 4. Copy the `DeployRoleArn` output.
 5. In the GitHub repository, add the secret `AWS_DEPLOY_ROLE_ARN` with that
    value (Settings > Secrets and variables > Actions).
-6. Push to `main`. CI now deploys the `DataLake` stack.
+6. Push to `main`. CI now deploys `DataLake`, `ResearchPipeline` and
+   `SustainabilityPipeline`.
 
 `GitHubDeploy` is never deployed from CI, so CI cannot change who may assume
 its role.

@@ -18,3 +18,4 @@ dbt/.user.yml
 logs/
 *.duckdb
 *.duckdb.wal
+cdk-outputs.json

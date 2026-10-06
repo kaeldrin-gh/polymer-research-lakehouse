@@ -31,9 +31,9 @@ def build_app() -> cdk.App:
     GitHubDeployStack(app, "GitHubDeploy", env=env, tags=tags)
     data_lake = DataLakeStack(app, "DataLake", env=env, tags=tags)
     pipeline = ResearchPipelineStack(app, "ResearchPipeline", env=env, tags=tags)
-    pipeline.add_dependency(data_lake)
+    pipeline.add_stack_dependency(data_lake)
     sustainability = SustainabilityPipelineStack(app, "SustainabilityPipeline", env=env, tags=tags)
-    sustainability.add_dependency(data_lake)
+    sustainability.add_stack_dependency(data_lake)
 
     # Security rules from cdk-nag: a finding that is not acknowledged with a
     # written reason fails the synth.

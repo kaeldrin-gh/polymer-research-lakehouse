@@ -15,6 +15,7 @@ from aws_cdk import aws_iam as iam
 from constructs import Construct
 
 from infra import config
+from infra.stacks.pipeline_base import nag_account
 
 GITHUB_OIDC_URL = "https://token.actions.githubusercontent.com"
 DEPLOY_ROLE_NAME = f"{config.PROJECT}-github-deploy"
@@ -65,8 +66,9 @@ class GitHubDeployStack(cdk.Stack):
         cdk.Validations.of(self.role).acknowledge(
             cdk.Acknowledgment(
                 id=(
-                    "AwsSolutions::AwsSolutions-IAM5[Resource::arn:aws:iam::<AWS::AccountId>:"
-                    f"role/cdk-{CDK_QUALIFIER}-*-<AWS::AccountId>-{self.region}]"
+                    "AwsSolutions::AwsSolutions-IAM5[Resource::arn:aws:iam::"
+                    f"{nag_account(self)}:role/cdk-{CDK_QUALIFIER}-*-{nag_account(self)}-"
+                    f"{self.region}]"
                 ),
                 reason=(
                     "The wildcard matches only the CDK bootstrap roles of this account and "

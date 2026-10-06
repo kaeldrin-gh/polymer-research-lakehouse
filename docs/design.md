@@ -222,7 +222,9 @@ Guardrails, all in CDK:
 ### Security
 
 - Root user: MFA, no access keys, used only for setup.
-- Local work: IAM Identity Center (free) for short-lived CLI credentials.
+- Local work: an IAM user with MFA and `aws login`, which turns the console
+  sign-in into short-lived CLI credentials. Not IAM Identity Center: it needs
+  AWS Organizations, which ends the free plan.
 - CI: OIDC role only. Workflow logs mask the account ID.
 
 ## Milestones

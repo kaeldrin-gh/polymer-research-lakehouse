@@ -24,3 +24,12 @@ def test_an_unacknowledged_finding_fails_the_synth():
         app.synth()
     assert "AwsSolutions-S1'" in str(failure.value)
     assert "AwsSolutions-S10'" in str(failure.value)
+
+
+def test_the_app_also_synthesizes_with_a_real_account(monkeypatch):
+    # With credentials, cdk-nag prints the account ID instead of the
+    # <AWS::AccountId> placeholder; every acknowledgment must still match.
+    from infra.app import build_app
+
+    monkeypatch.setenv("CDK_DEFAULT_ACCOUNT", "123456789012")
+    build_app().synth()
