@@ -101,6 +101,14 @@ def test_a_long_run_still_in_progress_is_not_reported():
     assert watch.problems(latest, NOW, LIMITS) == []
 
 
+def test_the_summary_logs_every_newest_run():
+    latest = {"DailyFeed": _run(hours_ago=2.75), "SnapshotLoad": None}
+    assert watch.summary(latest) == [
+        "DailyFeed: SUCCEEDED, run run-1, started 2026-10-07 05:15 UTC",
+        "SnapshotLoad: no run found",
+    ]
+
+
 def test_a_state_machine_without_runs_is_reported():
     (line,) = watch.problems({"DailyFeed": _run(), "SnapshotLoad": None}, NOW, LIMITS)
     assert line == "**SnapshotLoad**: no run found."

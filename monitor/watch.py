@@ -50,6 +50,20 @@ def problems(latest: dict[str, dict | None], now: datetime, limits: dict[str, in
     return found
 
 
+def summary(latest: dict[str, dict | None]) -> list[str]:
+    """One line per state machine for the workflow log: its newest run."""
+    lines = []
+    for prefix, run in latest.items():
+        if run is None:
+            lines.append(f"{prefix}: no run found")
+        else:
+            lines.append(
+                f"{prefix}: {run['status']}, run {run['name']}, "
+                f"started {run['startDate']:%Y-%m-%d %H:%M} UTC"
+            )
+    return lines
+
+
 def latest_runs(client, prefixes) -> dict[str, dict | None]:
     machines = {}
     for page in client.get_paginator("list_state_machines").paginate():
@@ -97,7 +111,10 @@ def main(argv=None) -> None:
 
     now = datetime.now(UTC)
     client = boto3.client("stepfunctions", region_name="us-east-1")
-    found = problems(latest_runs(client, WATCHED_STATE_MACHINES), now, WATCHED_STATE_MACHINES)
+    latest = latest_runs(client, WATCHED_STATE_MACHINES)
+    for line in summary(latest):
+        print(line)
+    found = problems(latest, now, WATCHED_STATE_MACHINES)
     for line in found:
         print(line)
     if found:

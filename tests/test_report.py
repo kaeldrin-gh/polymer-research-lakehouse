@@ -254,6 +254,9 @@ def test_freshness_is_checked_against_the_target():
     assert build._freshness(no_target, built, built) == "refreshed under an hour ago"
     assert build._freshness(entry, None, built) == "fresh within 48 h"
     assert build._freshness(no_target, None, built) is None
+    # A loaded table changes only when its source did, so it reports its last change.
+    loaded = {"freshness_sla_hours": None, "kind": "source"}
+    assert build._freshness(loaded, built - timedelta(hours=15), built) == ("last changed 15 h ago")
 
 
 def test_render_escapes_text_and_keeps_tables_for_every_chart():

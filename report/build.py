@@ -359,12 +359,17 @@ def _age(hours: float) -> str:
 
 
 def _freshness(entry: dict, updated: datetime | None, built_at: datetime) -> str | None:
-    """Last refresh against the product's freshness target, as text and icon."""
+    """Last refresh against the product's freshness target, as text and icon.
+
+    dbt rebuilds its products on every run, so their time is the last
+    refresh. A loaded table only changes when its source did (a load that
+    finds nothing new commits nothing), so its time is the last change."""
     sla = entry["freshness_sla_hours"]
     if updated is None:
         return f"fresh within {sla} h" if sla else None
     hours = (built_at - updated).total_seconds() / 3600
-    refreshed = f"refreshed {_age(hours)} ago"
+    verb = "last changed" if entry.get("kind") == "source" else "refreshed"
+    refreshed = f"{verb} {_age(hours)} ago"
     if not sla:
         return refreshed
     if hours <= sla:
